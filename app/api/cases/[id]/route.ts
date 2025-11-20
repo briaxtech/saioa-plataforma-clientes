@@ -219,22 +219,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
     }
 
+    // updated_at sin parámetro adicional
     updateFields.push(`updated_at = NOW()`)
 
-    const query = `
-      UPDATE cases 
-      SET ${updateFields.join(", ")}
-      WHERE id = $${paramIndex}
-      RETURNING *
-    `
-    updateValues.push(id)
-
+    // WHERE con id + organization_id
     const query = `
       UPDATE cases 
       SET ${updateFields.join(", ")}
       WHERE id = $${paramIndex} AND organization_id = $${paramIndex + 1}
       RETURNING *
     `
+
+    // Añadimos id y organization_id como últimos parámetros
     updateValues.push(id, user.organization_id)
 
     const result = await sql.unsafe(query, updateValues)
@@ -243,7 +239,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Case not found" }, { status: 404 })
     }
 
-    await logActivity(user.organization_id, user.id, "case_updated", `Updated case ${result[0].case_number}`, Number(id))
+    await logActivity(
+      user.organization_id,
+      user.id,
+      "case_updated",
+      `Updated case ${result[0].case_number}`,
+      Number(id),
+    )
 
     return NextResponse.json({ case: result[0] })
   } catch (error) {
