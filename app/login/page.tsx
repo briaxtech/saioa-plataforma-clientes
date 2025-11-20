@@ -27,17 +27,32 @@ export default function LoginPage() {
       await login(email, password)
 
       const response = await fetch("/api/auth/me")
-      const { user } = await response.json()
 
-      if (user.role === "admin" || user.role === "staff") {
+      // Si no hay sesión todavía o algo falló
+      if (!response.ok) {
+        // Si querés, podrías leer el error también:
+        // const data = await response.json()
+        // console.log("Error /api/auth/me", data)
         router.push("/admin/dashboard")
-      } else {
+        return
+      }
+
+      const data = await response.json()
+      const user = data?.user
+
+      if (user?.role === "admin" || user?.role === "staff") {
+        router.push("/admin/dashboard")
+      } else if (user?.role === "client") {
         router.push("/client/dashboard")
+      } else {
+        // Fallback razonable
+        router.push("/admin/dashboard")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesion. Intentalo de nuevo.")
     }
   }
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-[#031247] via-[#071f47] to-[#0d2b66] px-4 py-10">
@@ -107,5 +122,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
-

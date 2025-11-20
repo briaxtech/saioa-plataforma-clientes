@@ -108,7 +108,7 @@ model Organization {
 }
 
 model User {
-  id              String     @id @db.Text
+  id              String     @default(cuid()) @id @db.Text
   organizationId  String     @map("organization_id") @db.Text
   email           String     @db.Text
   name            String     @db.Text
