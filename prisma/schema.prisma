@@ -1,13 +1,13 @@
-// Prisma schema generated to mirror the existing Neon structure
+// Prisma schema for multi-tenant Supabase-backed platform
 
 generator client {
   provider = "prisma-client-js"
 }
 
- datasource db {
+datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
- }
+}
 
 enum CaseStatus {
   pending
@@ -30,6 +30,22 @@ enum CaseType {
   @@map("case_type")
 }
 
+enum CaseLifecycleStatus {
+  preparation
+  submitted
+  resolution
+  completed
+  @@map("case_lifecycle_status")
+}
+
+enum CaseStageStatus {
+  pending
+  in_progress
+  completed
+  blocked
+  @@map("case_stage_status")
+}
+
 enum PriorityLevel {
   low
   medium
@@ -44,6 +60,7 @@ enum DocumentStatus {
   approved
   rejected
   requires_action
+  not_required
   @@map("document_status")
 }
 
@@ -61,11 +78,42 @@ enum MessageStatus {
   @@map("message_status")
 }
 
+model Organization {
+  id            String   @id @default(uuid()) @db.Text
+  name          String
+  slug          String   @unique @db.Text
+  domain        String?  @unique @db.Text
+  logoUrl       String?  @map("logo_url") @db.Text
+  supportEmail  String?  @map("support_email") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @map("updated_at")
+
+  users             User[]
+  clients           Client[]
+  cases             Case[]
+  templates         CaseTypeTemplate[]
+  notifications     Notification[]
+  activities        ActivityLog[]
+  milestones        CaseMilestone[]
+  documents         Document[]
+  messages          Message[]
+  caseEvents        CaseEvent[]
+  caseContacts      CaseContact[]
+  keyDates          CaseKeyDate[]
+  keyDateReminders  CaseKeyDateReminder[]
+
+  @@map("organizations")
+}
+
 model User {
   id              String     @id @db.Text
-  email           String     @unique @db.Text
+  organizationId  String     @map("organization_id") @db.Text
+  email           String     @db.Text
   name            String     @db.Text
   role            UserRole   @default(client)
+  passwordHash    String?    @map("password_hash") @db.Text
   phone           String?    @db.Text
   address         String?    @db.Text
   dateOfBirth     DateTime?  @map("date_of_birth")
@@ -74,6 +122,7 @@ model User {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @default(now()) @map("updated_at")
 
+  organization    Organization @relation(fields: [organizationId], references: [id])
   client          Client?
   assignedClients Client[]   @relation("StaffClients")
   casesOwned      Case[]     @relation("CaseClient")
@@ -83,57 +132,78 @@ model User {
   receivedMessages Message[] @relation("MessageReceiver")
   notifications   Notification[]
   activities      ActivityLog[]
+  createdEvents   CaseEvent[] @relation("CaseEventCreatedBy")
 
+  @@unique([organizationId, email])
+  @@index([organizationId])
   @@map("users")
 }
 
 model Client {
   id               Int      @id @default(autoincrement())
+  organizationId   String   @map("organization_id") @db.Text
   userId           String   @unique @map("user_id") @db.Text
   caseCount        Int      @default(0) @map("case_count")
   assignedStaffId  String?  @map("assigned_staff_id") @db.Text
   notes            String?  @db.Text
-  driveFolderId    String?  @map("drive_folder_id") @db.Text
+  archivedAt       DateTime? @map("archived_at")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @default(now()) @map("updated_at")
 
-  user             User     @relation(fields: [userId], references: [id])
-  assignedStaff    User?    @relation("StaffClients", fields: [assignedStaffId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  user             User        @relation(fields: [userId], references: [id])
+  assignedStaff    User?       @relation("StaffClients", fields: [assignedStaffId], references: [id])
 
+  @@index([organizationId])
   @@map("clients")
 }
 
 model Case {
   id                   Int           @id @default(autoincrement())
-  caseNumber           String        @unique @map("case_number")
+  organizationId       String        @map("organization_id") @db.Text
+  caseNumber           String        @map("case_number")
   clientId             String?       @map("client_id") @db.Text
   assignedStaffId      String?       @map("assigned_staff_id") @db.Text
+  caseTypeTemplateId   String?       @map("case_type_template_id") @db.Text
   caseType             CaseType      @map("case_type")
   status               CaseStatus    @default(pending)
+  lifecycleStatus      CaseLifecycleStatus @default(preparation) @map("lifecycle_status")
   priority             PriorityLevel @default(medium)
   title                String
   description          String?       @db.Text
+  contactName          String?       @map("contact_name") @db.Text
+  contactEmail         String?       @map("contact_email") @db.Text
+  contactPhone         String?       @map("contact_phone") @db.Text
+  internalNotes        String?       @map("internal_notes") @db.Text
   filingDate           DateTime?     @map("filing_date")
   deadlineDate         DateTime?     @map("deadline_date")
   completionDate       DateTime?     @map("completion_date")
   progressPercentage   Int           @default(0) @map("progress_percentage")
-  googleDriveFolderId  String?       @map("google_drive_folder_id") @db.Text
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @default(now()) @map("updated_at")
 
-  client          User?           @relation("CaseClient", fields: [clientId], references: [id])
-  assignedStaff   User?           @relation("CaseAssignedStaff", fields: [assignedStaffId], references: [id])
-  milestones      CaseMilestone[]
-  documents       Document[]
-  messages        Message[]
-  notifications   Notification[]
-  activityLogs    ActivityLog[]
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  client               User?         @relation("CaseClient", fields: [clientId], references: [id])
+  assignedStaff        User?         @relation("CaseAssignedStaff", fields: [assignedStaffId], references: [id])
+  template             CaseTypeTemplate? @relation(fields: [caseTypeTemplateId], references: [id])
+  milestones           CaseMilestone[]
+  events               CaseEvent[]
+  documents            Document[]
+  messages             Message[]
+  notifications        Notification[]
+  activityLogs         ActivityLog[]
+  contacts             CaseContact[]
+  keyDates             CaseKeyDate[]
+  reminders            CaseKeyDateReminder[]
 
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId])
   @@map("cases")
 }
 
 model CaseMilestone {
   id          Int      @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Text
   caseId      Int      @map("case_id")
   title       String
   description String?  @db.Text
@@ -141,38 +211,49 @@ model CaseMilestone {
   completed   Boolean  @default(false)
   completedAt DateTime? @map("completed_at")
   orderIndex  Int      @map("order_index")
+  status      CaseStageStatus @default(pending)
+  assignedStaffId String? @map("assigned_staff_id") @db.Text
+  requiredDocuments Json? @map("required_documents")
+  subtasks    Json?   @map("subtasks")
+  notes       String? @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id])
   case        Case     @relation(fields: [caseId], references: [id])
 
+  @@index([organizationId])
   @@map("case_milestones")
 }
 
 model Document {
   id         Int            @id @default(autoincrement())
+  organizationId String     @map("organization_id") @db.Text
   caseId     Int            @map("case_id")
   uploaderId String?        @map("uploaded_by") @db.Text
   name       String
   description String?       @db.Text
-  fileUrl    String         @map("file_url")
+  storagePath String?       @map("storage_path") @db.Text
+  fileUrl    String?        @map("file_url") @db.Text
   fileSize   BigInt?        @map("file_size")
   mimeType   String?        @map("mime_type") @db.Text
   status     DocumentStatus @default(pending)
-  googleDriveFileId String? @map("google_drive_file_id") @db.Text
   isRequired Boolean        @default(false) @map("is_required")
   category   String?        @db.Text
   reviewNotes String?       @map("review_notes") @db.Text
   createdAt  DateTime       @default(now()) @map("created_at")
   updatedAt  DateTime       @default(now()) @map("updated_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id])
   case       Case          @relation(fields: [caseId], references: [id])
   uploader   User?         @relation("DocumentUploader", fields: [uploaderId], references: [id])
 
+  @@index([organizationId])
   @@map("documents")
 }
 
 model Message {
   id         Int           @id @default(autoincrement())
+  organizationId String    @map("organization_id") @db.Text
   caseId     Int           @map("case_id")
   senderId   String?       @map("sender_id") @db.Text
   receiverId String?       @map("receiver_id") @db.Text
@@ -182,15 +263,18 @@ model Message {
   readAt     DateTime?     @map("read_at")
   createdAt  DateTime      @default(now()) @map("created_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id])
   case       Case          @relation(fields: [caseId], references: [id])
   sender     User?         @relation("MessageSender", fields: [senderId], references: [id])
   receiver   User?         @relation("MessageReceiver", fields: [receiverId], references: [id])
 
+  @@index([organizationId])
   @@map("messages")
 }
 
 model Notification {
   id           Int      @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Text
   userId       String   @map("user_id") @db.Text
   title        String
   message      String
@@ -199,14 +283,17 @@ model Notification {
   isRead       Boolean  @default(false) @map("is_read")
   createdAt    DateTime @default(now()) @map("created_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id])
   user         User     @relation(fields: [userId], references: [id])
   case         Case?    @relation(fields: [relatedCaseId], references: [id])
 
+  @@index([organizationId])
   @@map("notifications")
 }
 
 model ActivityLog {
   id        Int      @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Text
   userId    String?  @map("user_id") @db.Text
   caseId    Int?     @map("case_id")
   action    String
@@ -214,14 +301,17 @@ model ActivityLog {
   metadata  Json?
   createdAt DateTime @default(now()) @map("created_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id])
   user      User?    @relation(fields: [userId], references: [id])
   case      Case?    @relation(fields: [caseId], references: [id])
 
+  @@index([organizationId])
   @@map("activity_logs")
 }
 
 model CaseTypeTemplate {
   id          String   @id @db.Text
+  organizationId String? @map("organization_id") @db.Text
   name        String
   description String?
   documents   Json     @default("[]")
@@ -231,5 +321,108 @@ model CaseTypeTemplate {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @map("updated_at")
 
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  cases        Case[]
+
+  @@index([organizationId])
   @@map("case_type_templates")
+}
+
+model CaseEvent {
+  id          Int      @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Text
+  caseId      Int      @map("case_id")
+  type        String
+  title       String
+  description String?
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  createdBy   String?  @map("created_by") @db.Text
+  attachments Json?    @default("[]")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  case        Case     @relation(fields: [caseId], references: [id])
+  createdByUser User?  @relation("CaseEventCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([organizationId])
+  @@map("case_events")
+}
+
+model CaseContact {
+  id        Int      @id @default(autoincrement())
+  organizationId String @map("organization_id") @db.Text
+  caseId    Int      @map("case_id")
+  fullName  String   @map("full_name")
+  email     String?  @db.Text
+  phone     String?  @db.Text
+  role      String?  @db.Text
+  organizationName String? @map("organization_name") @db.Text
+  notes     String?  @db.Text
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  case Case @relation(fields: [caseId], references: [id])
+
+  @@index([organizationId])
+  @@map("case_contacts")
+}
+
+model CaseKeyDate {
+  id                     Int      @id @default(autoincrement())
+  organizationId String  @map("organization_id") @db.Text
+  caseId                 Int      @map("case_id")
+  title                  String
+  description            String?  @db.Text
+  type                   String?  @db.Text
+  occursAt               DateTime @map("occurs_at")
+  timezone               String?  @db.Text
+  durationMinutes        Int?     @map("duration_minutes")
+  location               String?  @db.Text
+  syncToCalendar         Boolean  @default(false) @map("sync_to_calendar")
+  googleCalendarEventId  String?  @map("google_calendar_event_id") @db.Text
+  googleCalendarHtmlLink String?  @map("google_calendar_html_link") @db.Text
+  notifyByEmail          Boolean  @default(false) @map("notify_by_email")
+  notifyEmails           Json?    @map("notify_emails")
+  remindMinutesBefore    Int?     @map("remind_minutes_before")
+  emailSubject           String?  @map("email_subject")
+  emailBody              String?  @map("email_body") @db.Text
+  createdBy              String?  @map("created_by") @db.Text
+  updatedBy              String?  @map("updated_by") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @default(now()) @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  case       Case                  @relation(fields: [caseId], references: [id])
+  reminders  CaseKeyDateReminder[]
+
+  @@index([organizationId])
+  @@map("case_key_dates")
+}
+
+model CaseKeyDateReminder {
+  id                Int      @id @default(autoincrement())
+  organizationId    String   @map("organization_id") @db.Text
+  keyDateId         Int      @map("key_date_id")
+  caseId            Int      @map("case_id")
+  sendAt            DateTime @map("send_at")
+  status            String   @default("scheduled")
+  sendTo            Json?    @map("send_to")
+  subject           String
+  body              String?  @db.Text
+  sentAt            DateTime? @map("sent_at")
+  providerMessageId String?  @map("provider_message_id") @db.Text
+  lastError         String?  @map("last_error") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  keyDate CaseKeyDate @relation(fields: [keyDateId], references: [id])
+  case    Case        @relation(fields: [caseId], references: [id])
+
+  @@unique([keyDateId])
+  @@index([organizationId])
+  @@map("case_key_date_reminders")
 }

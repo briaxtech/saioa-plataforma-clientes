@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         client.name as client_name
       FROM cases c
       LEFT JOIN users client ON client.id = c.client_id
-      WHERE c.id = ${case_id}
+      WHERE c.id = ${case_id} AND c.organization_id = ${user.organization_id}
     `
 
     if (cases.length === 0) {
@@ -35,19 +35,20 @@ export async function POST(request: NextRequest) {
 
     const result = await sql`
       INSERT INTO documents (
-        case_id, name, description, category, is_required, status
+        organization_id, case_id, name, description, category, is_required, status
       )
       VALUES (
-        ${case_id}, ${name}, ${description || null}, ${category || null}, TRUE, 'pending'
+        ${user.organization_id}, ${case_id}, ${name}, ${description || null}, ${category || null}, TRUE, 'pending'
       )
       RETURNING *
     `
 
     const document = result[0]
 
-    await logActivity(user.id, "document_required", `Marcaste ${name} como requerido`, Number(case_id))
+    await logActivity(user.organization_id, user.id, "document_required", `Marcaste ${name} como requerido`, Number(case_id))
 
     await createNotification(
+      user.organization_id,
       caseData.client_id,
       "Nuevo documento requerido",
       `${caseData.client_name || "Tu asesor"} necesita el documento "${name}" para el caso ${caseData.case_number}`,

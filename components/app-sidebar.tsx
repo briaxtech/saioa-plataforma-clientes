@@ -14,16 +14,20 @@ interface NavItem {
   badge?: string
 }
 
+const DEFAULT_BRAND_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
+
 interface AppSidebarProps {
   items: NavItem[]
   userType: "admin" | "client"
+  organizationName?: string
   onLogout?: () => Promise<void> | void
   onNavigate?: () => void
   className?: string
 }
 
-export function AppSidebar({ items, userType, onLogout, onNavigate, className }: AppSidebarProps) {
+export function AppSidebar({ items, userType, organizationName, onLogout, onNavigate, className }: AppSidebarProps) {
   const pathname = usePathname()
+  const displayOrganization = organizationName || DEFAULT_BRAND_NAME
 
   const handleNavigate = () => {
     if (onNavigate) {
@@ -46,7 +50,7 @@ export function AppSidebar({ items, userType, onLogout, onNavigate, className }:
       )}
     >
       {/* Logo */}
-      <div className="bg-white p-6">
+      <div className="bg-white p-6 text-center">
         <Link
           href={userType === "admin" ? "/admin/dashboard" : "/client/dashboard"}
           className="flex flex-col items-center gap-2 text-center"
@@ -58,6 +62,7 @@ export function AppSidebar({ items, userType, onLogout, onNavigate, className }:
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[#031247]/70">
             Portal {userType === "admin" ? "equipo" : "clientes"}
           </div>
+          <p className="text-[11px] font-medium text-[#031247]/50">{displayOrganization}</p>
         </Link>
       </div>
       <div className="mx-4 mb-4 h-1 rounded-full bg-gradient-to-r from-primary/60 via-primary to-primary/60" />

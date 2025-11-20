@@ -18,7 +18,7 @@ interface LayoutWrapperProps {
 
 export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperProps) {
   const router = useRouter()
-  const { logout } = useAuth()
+  const { logout, organization } = useAuth()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
 
   const handleLogout = async () => {
@@ -37,6 +37,7 @@ export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperPro
         <AppSidebar
           items={navItems}
           userType={userType}
+          organizationName={organization?.name}
           onLogout={handleLogout}
           className="hidden lg:flex lg:w-64"
         />
@@ -55,12 +56,13 @@ export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperPro
 
               <Link
                 href={userType === "admin" ? "/admin/dashboard" : "/client/dashboard"}
-                className="flex flex-1 flex-col items-center gap-2 text-center"
+                className="flex flex-1 flex-col items-center gap-1 text-center"
               >
                 <Logo className="w-32" priority />
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Portal {userType === "admin" ? "equipo" : "clientes"}
                 </span>
+                {organization?.name && <span className="text-[11px] text-muted-foreground/70">{organization.name}</span>}
               </Link>
 
               <button
@@ -86,6 +88,7 @@ export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperPro
             <AppSidebar
               items={navItems}
               userType={userType}
+              organizationName={organization?.name}
               onLogout={handleLogout}
               onNavigate={closeMobileNav}
               className="h-full w-full"

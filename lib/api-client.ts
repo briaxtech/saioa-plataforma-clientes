@@ -63,10 +63,6 @@ export const apiClient = {
 
 export const api = {
   // Auth
-  login: (email: string, password: string) => apiClient.post("/api/auth/login", { email, password }),
-
-  logout: () => apiClient.post("/api/auth/logout", {}),
-
   getCurrentUser: () => apiClient.get("/api/auth/me"),
 
   // Cases
@@ -81,6 +77,25 @@ export const api = {
 
   updateCase: (id: string, data: any) => apiClient.patch(`/api/cases/${id}`, data),
 
+  updateCaseStage: (caseId: string | number, stageId: string | number, data: any) =>
+    apiClient.patch(`/api/cases/${caseId}/stages/${stageId}`, data),
+
+  createCaseEvent: (caseId: string | number, data: any) => apiClient.post(`/api/cases/${caseId}/events`, data),
+
+  getCaseContacts: (caseId: string | number) => apiClient.get(`/api/cases/${caseId}/contacts`),
+  createCaseContact: (caseId: string | number, data: any) => apiClient.post(`/api/cases/${caseId}/contacts`, data),
+  updateCaseContact: (caseId: string | number, contactId: string | number, data: any) =>
+    apiClient.patch(`/api/cases/${caseId}/contacts/${contactId}`, data),
+  deleteCaseContact: (caseId: string | number, contactId: string | number) =>
+    apiClient.delete(`/api/cases/${caseId}/contacts/${contactId}`),
+
+  getCaseKeyDates: (caseId: string | number) => apiClient.get(`/api/cases/${caseId}/key-dates`),
+  createCaseKeyDate: (caseId: string | number, data: any) => apiClient.post(`/api/cases/${caseId}/key-dates`, data),
+  updateCaseKeyDate: (caseId: string | number, keyDateId: string | number, data: any) =>
+    apiClient.patch(`/api/cases/${caseId}/key-dates/${keyDateId}`, data),
+  deleteCaseKeyDate: (caseId: string | number, keyDateId: string | number) =>
+    apiClient.delete(`/api/cases/${caseId}/key-dates/${keyDateId}`),
+
   // Clients
   getClients: (params?: { search?: string }) => {
     const query = new URLSearchParams(params as any).toString()
@@ -90,6 +105,10 @@ export const api = {
   getClient: (id: string) => apiClient.get(`/api/clients/${id}`),
 
   createClient: (data: any) => apiClient.post("/api/clients", data),
+
+  updateClient: (id: string, data: any) => apiClient.patch(`/api/clients/${id}`, data),
+
+  deleteClient: (id: string) => apiClient.delete(`/api/clients/${id}`),
 
   // Documents
   getDocuments: (params?: { case_id?: string; status?: string }) => {
@@ -143,4 +162,8 @@ export const api = {
   createCaseType: (data: any) => apiClient.post("/api/case-types", data),
   updateCaseType: (id: string, data: any) => apiClient.patch(`/api/case-types/${id}`, data),
   deleteCaseType: (id: string) => apiClient.delete(`/api/case-types/${id}`),
+
+  // Users
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    apiClient.post("/api/users/password", payload),
 }

@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Sentir Extranjero palette */
+  /* Default tenant palette */
   --primary: #36ccca;
   --primary-foreground: #031247;
 

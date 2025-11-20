@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import { useState } from "react"
@@ -9,11 +9,14 @@ import { Card } from "@/components/ui/card"
 import { Logo } from "@/components/logo"
 import { useAuth } from "@/lib/auth-context"
 
+const DEFAULT_APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
+const DEFAULT_SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "soporte@example.com"
+
 export default function LoginPage() {
   const router = useRouter()
   const { login, isLoading } = useAuth()
-  const [email, setEmail] = useState("admin@sentirextranjero.com")
-  const [password, setPassword] = useState("demo123")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -37,13 +40,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#031247] via-[#071f47] to-[#0d2b66] px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-[#031247] via-[#071f47] to-[#0d2b66] px-4 py-10">
       <Card className="w-full max-w-md border border-white/15 bg-white/95 shadow-2xl backdrop-blur">
         <div className="p-8">
           <div className="mb-8 flex flex-col items-center text-center">
             <Logo className="mb-4 w-44" priority />
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary">Portal privado</p>
-            <p className="mt-2 text-sm text-muted-foreground">Acompanamos cada expediente de extranjeria en Espana.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Gestiona clientes y expedientes de {DEFAULT_APP_NAME} en un solo lugar.
+            </p>
           </div>
 
           {error && (
@@ -55,12 +60,12 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground">
-                Correo electronico
+                Correo electrónico
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="miembros@sentirextranjero.com"
+                placeholder="equipo@tuagencia.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full"
@@ -69,7 +74,7 @@ export default function LoginPage() {
 
             <div>
               <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-foreground">
-                Contrasena
+                Contraseña
               </label>
               <Input
                 id="password"
@@ -88,18 +93,19 @@ export default function LoginPage() {
 
           <div className="mt-6 space-y-3 rounded-lg bg-muted p-4 text-xs text-muted-foreground">
             <div>
-              <p className="mb-1 font-medium text-foreground">Equipo Sentir Extranjero</p>
-              <p>Correo: admin@sentirextranjero.com</p>
-              <p>Contrasena: demo123</p>
+              <p className="mb-1 font-medium text-foreground">Administrador demo</p>
+              <p>Correo: admin@demo.com</p>
+              <p>Contraseña: demo123</p>
             </div>
-            <div>
-              <p className="mb-1 font-medium text-foreground">Clientes</p>
-              <p>Correo: ana.garcia@email.com</p>
-              <p>Contrasena: demo123</p>
-            </div>
+            <p className="pt-2 text-[11px]">
+              ¿Necesitas ayuda para ingresar? Escribinos a{" "}
+              <span className="font-medium text-foreground">{DEFAULT_SUPPORT_EMAIL}</span>
+            </p>
           </div>
         </div>
       </Card>
     </div>
   )
 }
+
+

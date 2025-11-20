@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
-import { LayoutDashboard, Layers3, Settings, Users } from "lucide-react"
+import { Archive, LayoutDashboard, Layers3, Settings, Users } from "lucide-react"
 import { LayoutWrapper } from "@/components/layout-wrapper"
 import { useAuth } from "@/lib/auth-context"
 import { api, apiClient } from "@/lib/api-client"
@@ -14,7 +14,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { user, isLoading } = useAuth()
 
-  const { data: clientsData } = useSWR("/api/clients", apiClient.get)
+  const { data: clientsData } = useSWR("/api/clients?archived=false", apiClient.get)
   const { data: casesData } = useSWR("/api/cases", apiClient.get)
   const { data: activityData } = useSWR("/api/activity?limit=50", () => api.getActivity({ limit: 50 }))
 
@@ -63,6 +63,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       href: "/admin/clients",
       icon: <Users className="h-4 w-4" />,
       badge: clientsCount ? String(clientsCount) : undefined,
+    },
+    {
+      label: "Archivo",
+      href: "/admin/archive",
+      icon: <Archive className="h-4 w-4" />,
     },
     {
       label: "Tipos de caso",

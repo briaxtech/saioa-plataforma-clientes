@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Mail, Phone, FileText, Bell } from "lucide-react"
+import { Bell, Mail, Phone } from "lucide-react"
 import { api, apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 
@@ -18,6 +18,18 @@ const priorityOptions = [
   { value: "medium", label: "Media" },
   { value: "high", label: "Alta" },
   { value: "urgent", label: "Urgente" },
+]
+
+const countryOptions = [
+  { value: "Argentina", label: "Argentina", dialCode: "+54" },
+  { value: "Chile", label: "Chile", dialCode: "+56" },
+  { value: "Colombia", label: "Colombia", dialCode: "+57" },
+  { value: "Mexico", label: "Mexico", dialCode: "+52" },
+  { value: "Peru", label: "Peru", dialCode: "+51" },
+  { value: "Uruguay", label: "Uruguay", dialCode: "+598" },
+  { value: "Venezuela", label: "Venezuela", dialCode: "+58" },
+  { value: "Espana", label: "Espana", dialCode: "+34" },
+  { value: "Estados Unidos", label: "Estados Unidos", dialCode: "+1" },
 ]
 
 interface ClientFormState {
@@ -29,6 +41,8 @@ interface ClientFormState {
   caseTypeId: string
   priority: string
 }
+
+type FormErrors = Partial<Record<keyof ClientFormState, string>>
 
 const emptyForm: ClientFormState = {
   name: "",
@@ -45,17 +59,22 @@ export default function ClientsPage() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<FormErrors>({})
   const { toast } = useToast()
 
   const {
     data: clientsData,
     mutate: mutateClients,
     isLoading,
-  } = useSWR("/api/clients", apiClient.get)
+  } = useSWR("/api/clients?archived=false", apiClient.get)
 
   const { data: caseTypesData } = useSWR("/api/case-types", () => api.getCaseTypes())
   const caseTypes = caseTypesData?.caseTypes || []
   const selectedType = caseTypes.find((type: any) => type.id === form.caseTypeId)
+  const selectedCountry = useMemo(
+    () => countryOptions.find((country) => country.value === form.country_of_origin),
+    [form.country_of_origin],
+  )
 
   const filteredClients = (clientsData?.clients || []).filter((client: any) => {
     const query = searchTerm.toLowerCase()
@@ -64,18 +83,112 @@ export default function ClientsPage() {
 
   const resetForm = () => {
     setForm(emptyForm)
+    setErrors({})
+  }
+
+  const clearFieldError = (field: keyof ClientFormState) => {
+    setErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const updateField = (field: keyof ClientFormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    clearFieldError(field)
+  }
+
+  const validateForm = () => {
+    const newErrors: FormErrors = {}
+    const trimmedName = form.name.trim()
+    const trimmedEmail = form.email.trim()
+    const trimmedPhone = form.phone.trim()
+
+    if (!trimmedName) {
+      newErrors.name = "Ingresa el nombre del cliente."
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!trimmedEmail) {
+      newErrors.email = "El correo es obligatorio."
+    } else if (!emailPattern.test(trimmedEmail)) {
+      newErrors.email = "El formato de correo no es valido."
+    }
+
+    if (!trimmedPhone) {
+      newErrors.phone = "El telefono es obligatorio."
+    } else if (!/^\+?[0-9][0-9\s-]{7,}$/.test(trimmedPhone)) {
+      newErrors.phone = "Usa un telefono valido e incluye el prefijo."
+    }
+
+    if (!form.country_of_origin) {
+      newErrors.country_of_origin = "Selecciona el pais de origen."
+    }
+
+    if (!form.caseTypeId) {
+      newErrors.caseTypeId = "Selecciona el tipo de caso."
+    }
+
+    if (!form.priority) {
+      newErrors.priority = "Selecciona la prioridad."
+    }
+
+    return newErrors
+  }
+
+  const handleCountryChange = (value: string) => {
+    const nextCountry = countryOptions.find((country) => country.value === value)
+    setForm((prev) => {
+      const previousCountry = countryOptions.find((country) => country.value === prev.country_of_origin)
+      const previousDial = previousCountry?.dialCode
+      const nextDial = nextCountry?.dialCode
+      let nextPhone = prev.phone
+
+      if (!prev.phone.trim() && nextDial) {
+        nextPhone = `${nextDial} `
+      } else if (previousDial && nextDial && prev.phone.startsWith(previousDial)) {
+        nextPhone = `${nextDial}${prev.phone.slice(previousDial.length)}`
+      }
+
+      return {
+        ...prev,
+        country_of_origin: value,
+        phone: nextPhone,
+      }
+    })
+    clearFieldError("country_of_origin")
+  }
+
+  const handlePhoneFocus = () => {
+    if (form.phone.trim() || !selectedCountry?.dialCode) return
+    updateField("phone", `${selectedCountry.dialCode} `)
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!form.name.trim() || !form.email.trim()) {
-      toast({ title: "Campos incompletos", description: "Nombre y correo son obligatorios.", variant: "destructive" })
+    const validationErrors = validateForm()
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      toast({
+        title: "Revisa los datos",
+        description: "Hay campos que necesitan tu atencion.",
+        variant: "destructive",
+      })
       return
     }
 
     setIsSubmitting(true)
     try {
-      await api.createClient(form)
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        notes: form.notes.trim(),
+      }
+      await api.createClient(payload)
       toast({ title: "Cliente creado" })
       mutateClients()
       resetForm()
@@ -119,22 +232,86 @@ export default function ClientsPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Nombre completo</label>
-                <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
+                <Input
+                  value={form.name}
+                  onChange={(e) => updateField("name", e.target.value)}
+                  aria-invalid={Boolean(errors.name)}
+                  aria-describedby={errors.name ? "name-error" : undefined}
+                  autoComplete="name"
+                  className={errors.name ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {errors.name && (
+                  <p id="name-error" className="mt-1 text-xs text-destructive">
+                    {errors.name}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Correo</label>
-                <Input type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => updateField("email", e.target.value)}
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={errors.email ? "email-error" : undefined}
+                  autoComplete="email"
+                  className={errors.email ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {errors.email && (
+                  <p id="email-error" className="mt-1 text-xs text-destructive">
+                    {errors.email}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Telefono</label>
-                <Input value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} />
+                <Input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => updateField("phone", e.target.value)}
+                  onFocus={handlePhoneFocus}
+                  aria-invalid={Boolean(errors.phone)}
+                  aria-describedby={
+                    errors.phone ? "phone-error" : selectedCountry ? "phone-hint" : undefined
+                  }
+                  autoComplete="tel"
+                  placeholder="+34 600 000 000"
+                  className={errors.phone ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {selectedCountry && !errors.phone && (
+                  <p id="phone-hint" className="mt-1 text-xs text-muted-foreground">
+                    Prefijo sugerido: {selectedCountry.dialCode}
+                  </p>
+                )}
+                {errors.phone && (
+                  <p id="phone-error" className="mt-1 text-xs text-destructive">
+                    {errors.phone}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Pais de origen</label>
-                <Input
-                  value={form.country_of_origin}
-                  onChange={(e) => setForm((prev) => ({ ...prev, country_of_origin: e.target.value }))}
-                />
+                <Select value={form.country_of_origin} onValueChange={handleCountryChange}>
+                  <SelectTrigger
+                    className={errors.country_of_origin ? "border-destructive focus-visible:ring-destructive" : ""}
+                    aria-invalid={Boolean(errors.country_of_origin)}
+                    aria-describedby={errors.country_of_origin ? "country-error" : undefined}
+                  >
+                    <SelectValue placeholder="Selecciona una opcion" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countryOptions.map((country) => (
+                      <SelectItem key={country.value} value={country.value}>
+                        {country.label} ({country.dialCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.country_of_origin && (
+                  <p id="country-error" className="mt-1 text-xs text-destructive">
+                    {errors.country_of_origin}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -143,9 +320,13 @@ export default function ClientsPage() {
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Tipo de caso</label>
                 <Select
                   value={form.caseTypeId}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, caseTypeId: value }))}
+                  onValueChange={(value) => updateField("caseTypeId", value)}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger
+                    className={`w-full ${errors.caseTypeId ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                    aria-invalid={Boolean(errors.caseTypeId)}
+                    aria-describedby={errors.caseTypeId ? "case-type-error" : undefined}
+                  >
                     <SelectValue placeholder="Selecciona una opcion" />
                   </SelectTrigger>
                   <SelectContent>
@@ -156,11 +337,23 @@ export default function ClientsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.caseTypeId && (
+                  <p id="case-type-error" className="mt-1 text-xs text-destructive">
+                    {errors.caseTypeId}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Prioridad</label>
-                <Select value={form.priority} onValueChange={(value) => setForm((prev) => ({ ...prev, priority: value }))}>
-                  <SelectTrigger className="w-full">
+                <Select
+                  value={form.priority}
+                  onValueChange={(value) => updateField("priority", value)}
+                >
+                  <SelectTrigger
+                    className={`w-full ${errors.priority ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                    aria-invalid={Boolean(errors.priority)}
+                    aria-describedby={errors.priority ? "priority-error" : undefined}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -171,6 +364,11 @@ export default function ClientsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.priority && (
+                  <p id="priority-error" className="mt-1 text-xs text-destructive">
+                    {errors.priority}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -178,9 +376,10 @@ export default function ClientsPage() {
               <label className="text-xs font-semibold uppercase text-muted-foreground">Notas internas</label>
               <Textarea
                 value={form.notes}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                onChange={(e) => updateField("notes", e.target.value)}
                 className="min-h-[120px]"
                 placeholder="Datos adicionales, contexto de la consulta, etc."
+                aria-invalid={false}
               />
             </div>
 

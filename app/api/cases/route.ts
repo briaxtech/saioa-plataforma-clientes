@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql, logActivity } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { ensureCaseDriveFolder, ensureClientDriveFolder } from "@/lib/google-drive-service"
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,10 +22,10 @@ export async function GET(request: NextRequest) {
       FROM cases c
       LEFT JOIN users client ON c.client_id = client.id
       LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-      WHERE 1=1
+      WHERE c.organization_id = $1
     `
 
-    const params: any[] = []
+    const params: any[] = [user.organization_id]
 
     // Filter by user role
     if (user.role === "client") {
@@ -46,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     query += " ORDER BY c.created_at DESC"
 
-    const cases = await sql.query(query, params)
+    const cases = await sql.unsafe(query, params)
 
     return NextResponse.json({ cases })
   } catch (error) {
@@ -63,63 +62,98 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { client_id, case_type, title, description, priority = "medium", filing_date, deadline_date } = body
+    const {
+      client_id,
+      case_type,
+      case_type_template_id,
+      title,
+      description,
+      priority = "medium",
+      filing_date,
+      deadline_date,
+    } = body
+
+    let resolvedCaseType = case_type
+    let templateDocuments: any[] = []
+    const clientRows = await sql`
+      SELECT *
+      FROM clients
+      WHERE user_id = ${client_id} AND organization_id = ${user.organization_id}
+    `
+    if (clientRows.length === 0) {
+      return NextResponse.json({ error: "Client not found" }, { status: 404 })
+    }
+
+    if (case_type_template_id) {
+      const templates = await sql`
+        SELECT *
+        FROM case_type_templates
+        WHERE id = ${case_type_template_id} AND (organization_id = ${user.organization_id} OR organization_id IS NULL)
+      `
+      if (templates.length === 0) {
+        return NextResponse.json({ error: "Case template not found" }, { status: 404 })
+      }
+      const template = templates[0]
+      resolvedCaseType = template.base_case_type || case_type
+      if (Array.isArray(template.documents)) {
+        templateDocuments = template.documents
+      } else if (typeof template.documents === "string") {
+        try {
+          templateDocuments = JSON.parse(template.documents)
+        } catch {
+          templateDocuments = []
+        }
+      }
+    }
 
     // Generate case number
-    const caseNumber = `${case_type.toUpperCase().substring(0, 3)}-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, "0")}`
+    const caseNumber = `${(resolvedCaseType || "cas").toUpperCase().substring(0, 3)}-${new Date().getFullYear()}-${String(
+      Math.floor(Math.random() * 9999),
+    ).padStart(4, "0")}`
 
     const result = await sql`
       INSERT INTO cases (
-        case_number, client_id, assigned_staff_id, case_type, 
-        title, description, priority, filing_date, deadline_date
+        organization_id, case_number, client_id, assigned_staff_id, case_type, 
+        title, description, priority, filing_date, deadline_date, case_type_template_id
       )
       VALUES (
-        ${caseNumber}, ${client_id}, ${user.id}, ${case_type},
-        ${title}, ${description || null}, ${priority}, 
-        ${filing_date || null}, ${deadline_date || null}
+        ${user.organization_id}, ${caseNumber}, ${client_id}, ${user.id}, ${resolvedCaseType},
+        ${title}, ${description || null}, ${priority},
+        ${filing_date || null}, ${deadline_date || null}, ${case_type_template_id || null}
       )
       RETURNING *
     `
 
     const newCase = result[0]
 
-    try {
-      const clientRecords = await sql`
-        SELECT c.id, c.drive_folder_id, u.name
-        FROM clients c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.user_id = ${client_id}
+    if (templateDocuments.length > 0) {
+      const existingDocs = await sql`
+        SELECT LOWER(name) as name
+        FROM documents
+        WHERE case_id = ${newCase.id}
       `
-
-      if (clientRecords.length > 0) {
-        let clientFolderId = clientRecords[0].drive_folder_id
-        if (!clientFolderId) {
-          clientFolderId = await ensureClientDriveFolder(clientRecords[0].name)
-          await sql`
-            UPDATE clients
-            SET drive_folder_id = ${clientFolderId}
-            WHERE id = ${clientRecords[0].id}
+      const existingNames = new Set(existingDocs.map((doc: any) => doc.name))
+      const docsToInsert = templateDocuments
+        .map((entry: any) => {
+          const docName = typeof entry === "string" ? entry : entry?.name
+          if (!docName) return null
+          const normalized = docName.trim().toLowerCase()
+          if (!normalized || existingNames.has(normalized)) return null
+          existingNames.add(normalized)
+          const docCategory = typeof entry === "object" ? entry?.category || null : null
+          const docDescription =
+            typeof entry === "object" ? entry?.description || entry?.notes || entry?.instruction || null : null
+          return sql`
+            INSERT INTO documents (organization_id, case_id, name, description, category, is_required, status)
+            VALUES (${user.organization_id}, ${newCase.id}, ${docName}, ${docDescription}, ${docCategory}, TRUE, 'pending')
           `
-        }
-
-        if (clientFolderId) {
-          const caseFolderId = await ensureCaseDriveFolder(caseNumber, clientFolderId, newCase.google_drive_folder_id || undefined)
-          if (caseFolderId && !newCase.google_drive_folder_id) {
-            await sql`
-              UPDATE cases
-              SET google_drive_folder_id = ${caseFolderId}
-              WHERE id = ${newCase.id}
-            `
-            newCase.google_drive_folder_id = caseFolderId
-          }
-        }
-      }
-    } catch (driveError) {
-      console.error("[v0] Failed to provision Drive folder for case:", driveError)
+        })
+        .filter(Boolean)
+      await Promise.all(docsToInsert as Promise<any>[])
     }
 
     // Log activity
-    await logActivity(user.id, "case_created", `Created new case ${caseNumber}`, newCase.id)
+    await logActivity(user.organization_id, user.id, "case_created", `Created new case ${caseNumber}`, newCase.id)
 
     return NextResponse.json({ case: newCase }, { status: 201 })
   } catch (error) {

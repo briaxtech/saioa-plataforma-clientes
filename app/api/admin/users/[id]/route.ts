@@ -31,18 +31,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const query = `
       UPDATE users 
       SET ${updateFields.join(", ")}
-      WHERE id = $${paramIndex}
+      WHERE id = $${paramIndex} AND organization_id = $${paramIndex + 1}
       RETURNING *
     `
-    updateValues.push(id)
+    updateValues.push(id, admin.organization_id)
 
-    const result = await sql.query(query, updateValues)
+    const result = await sql.unsafe(query, updateValues)
 
     if (result.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    await logActivity(admin.id, "user_updated", `Updated user: ${result[0].name}`)
+    await logActivity(admin.organization_id, admin.id, "user_updated", `Updated user: ${result[0].name}`)
 
     return NextResponse.json({ user: result[0] })
   } catch (error) {
@@ -56,7 +56,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const admin = await requireRole(["admin"])
     const { id } = await params
 
-    const users = await sql`SELECT * FROM users WHERE id = ${id}`
+    const users = await sql`
+      SELECT * FROM users WHERE id = ${id} AND organization_id = ${admin.organization_id}
+    `
 
     if (users.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
@@ -64,9 +66,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const user = users[0]
 
-    await sql`DELETE FROM users WHERE id = ${id}`
+    await sql`DELETE FROM users WHERE id = ${id} AND organization_id = ${admin.organization_id}`
 
-    await logActivity(admin.id, "user_deleted", `Deleted user: ${user.name}`)
+    await logActivity(admin.organization_id, admin.id, "user_deleted", `Deleted user: ${user.name}`)
 
     return NextResponse.json({ success: true })
   } catch (error) {

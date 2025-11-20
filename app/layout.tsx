@@ -5,13 +5,14 @@ import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/lib/auth-context"
 import "./globals.css"
 
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
+
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Sentir Extranjero - Portal de extranjeria y nacionalidad",
-  description:
-    "Espacio privado del equipo de Sentir Extranjero para seguir expedientes, documentos y mensajes de clientes.",
+  title: `${APP_NAME} - Portal de casos y clientes`,
+  description: `Espacio privado del equipo de ${APP_NAME} para seguir expedientes, documentos y mensajes de clientes.`,
   generator: "v0.app",
   icons: {
     icon: [

@@ -21,15 +21,15 @@ export async function GET(request: NextRequest) {
       FROM activity_logs a
       LEFT JOIN users u ON a.user_id = u.id
       LEFT JOIN cases c ON a.case_id = c.id
-      WHERE 1=1
+      WHERE a.organization_id = $1
     `
 
-    const params: any[] = []
+    const params: any[] = [user.organization_id]
 
     if (user.role === "client") {
       // Client can only see their own case activities
       query += ` AND a.case_id IN (
-        SELECT id FROM cases WHERE client_id = $${params.length + 1}
+        SELECT id FROM cases WHERE client_id = $${params.length + 1} AND organization_id = ${user.organization_id}
       )`
       params.push(user.id)
     }
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     query += ` ORDER BY a.created_at DESC LIMIT $${params.length + 1}`
     params.push(limit)
 
-    const activities = await sql.query(query, params)
+    const activities = await sql.unsafe(query, params)
 
     return NextResponse.json({ activities })
   } catch (error) {

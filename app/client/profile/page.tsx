@@ -1,54 +1,119 @@
 "use client"
 
+import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api-client"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ProfilePage() {
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleChange = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
+      toast({ title: "Completa todos los campos", variant: "destructive" })
+      return
+    }
+
+    if (form.newPassword !== form.confirmPassword) {
+      toast({ title: "Las contraseñas no coinciden", variant: "destructive" })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await api.changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      })
+      toast({ title: "Contraseña actualizada" })
+      setForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
+    } catch (error: any) {
+      toast({
+        title: "No pudimos actualizar la contraseña",
+        description: error?.message || "Intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Perfil</h1>
-        <p className="text-muted-foreground mt-2">Gestiona tu información personal</p>
+        <h1 className="text-3xl font-bold text-foreground">Perfil y seguridad</h1>
+        <p className="mt-2 text-muted-foreground">Actualiza tu contraseña y consulta los datos básicos de tu cuenta.</p>
       </div>
 
       <Card className="p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-6">Información personal</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <h2 className="mb-6 text-lg font-semibold text-foreground">Datos de la cuenta</h2>
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Nombre</label>
-            <Input type="text" defaultValue="John" />
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Nombre completo</label>
+            <Input value={user?.name || "Sin dato"} disabled />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Apellido</label>
-            <Input type="text" defaultValue="Doe" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Correo electrónico</label>
-            <Input type="email" defaultValue="john@example.com" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Teléfono</label>
-            <Input type="tel" defaultValue="+1 (555) 123-4567" />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-foreground mb-1.5">Dirección</label>
-            <Input type="text" defaultValue="123 Main St, City, State 12345" />
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Correo</label>
+            <Input value={user?.email || "Sin dato"} disabled />
           </div>
         </div>
-        <Button className="bg-primary hover:bg-primary/90">Guardar cambios</Button>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Si necesitás actualizar tus datos personales, escribinos a soporte@sentirextranjero.com para que podamos ayudarte.
+        </p>
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-6">Seguridad</h2>
-        <div className="space-y-4">
-          <Button variant="outline" className="w-full bg-transparent">
-            Cambiar contraseña
+        <h2 className="mb-6 text-lg font-semibold text-foreground">Cambiar contraseña</h2>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Contraseña actual</label>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={form.currentPassword}
+              onChange={(event) => handleChange("currentPassword", event.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Nueva contraseña</label>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={form.newPassword}
+                onChange={(event) => handleChange("newPassword", event.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Confirmar contraseña</label>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={(event) => handleChange("confirmPassword", event.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            La contraseña debe tener al menos 8 caracteres, combinando letras y números. Puedes cambiarla cuando quieras
+            desde esta pantalla.
+          </p>
+          <Button type="submit" className="mt-2" disabled={isSubmitting}>
+            {isSubmitting ? "Guardando..." : "Actualizar contraseña"}
           </Button>
-          <Button variant="outline" className="w-full bg-transparent">
-            Autenticación en dos pasos
-          </Button>
-        </div>
+        </form>
       </Card>
     </div>
   )

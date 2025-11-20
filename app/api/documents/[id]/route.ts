@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql, logActivity, createNotification } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { deleteCaseDocument } from "@/lib/storage"
 
 const STATUS_MESSAGES: Record<string, string> = {
   approved: "fue verificado correctamente",
@@ -8,6 +9,7 @@ const STATUS_MESSAGES: Record<string, string> = {
   requires_action: "requiere cambios",
   submitted: "se registró",
   pending: "se marcó como pendiente",
+  not_required: "ya no es necesario",
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +22,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params
     const body = await request.json()
     const { status, review_notes, is_required } = body
+
+    const existingDocs = await sql`
+      SELECT *
+      FROM documents
+      WHERE id = ${id} AND organization_id = ${user.organization_id}
+    `
+
+    if (existingDocs.length === 0) {
+      return NextResponse.json({ error: "Document not found" }, { status: 404 })
+    }
 
     const updateParts: string[] = []
     const values: any[] = []
@@ -47,16 +59,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const query = `
       UPDATE documents
       SET ${updateParts.join(", ")}
-      WHERE id = $${values.length + 1}
+      WHERE id = $${values.length + 1} AND organization_id = $${values.length + 2}
       RETURNING *
     `
-    values.push(id)
+    values.push(id, user.organization_id)
 
-    const result = await sql.query(query, values)
-
-    if (result.length === 0) {
-      return NextResponse.json({ error: "Document not found" }, { status: 404 })
-    }
+    const result = await sql.unsafe(query, values)
 
     const document = result[0]
 
@@ -64,15 +72,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       SELECT c.*, client.id as client_id, client.name as client_name
       FROM cases c
       JOIN users client ON c.client_id = client.id
-      WHERE c.id = ${document.case_id}
+      WHERE c.id = ${document.case_id} AND c.organization_id = ${user.organization_id}
     `
 
     if (cases.length > 0 && status) {
       const caseData = cases[0]
 
-      await logActivity(user.id, "document_status_updated", `Actualizaste ${document.name} a ${status}`, document.case_id)
+      await logActivity(user.organization_id, user.id, "document_status_updated", `Actualizaste ${document.name} a ${status}`, document.case_id)
 
       await createNotification(
+        user.organization_id,
         caseData.client_id,
         "Estado de documento actualizado",
         `Tu documento "${document.name}" ${STATUS_MESSAGES[status] || "fue actualizado"}.`,
@@ -102,7 +111,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       SELECT d.*, c.client_id
       FROM documents d
       JOIN cases c ON d.case_id = c.id
-      WHERE d.id = ${id}
+      WHERE d.id = ${id} AND d.organization_id = ${user.organization_id}
     `
 
     if (documents.length === 0) {
@@ -116,9 +125,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    await sql`DELETE FROM documents WHERE id = ${id}`
+    await sql`DELETE FROM documents WHERE id = ${id} AND organization_id = ${user.organization_id}`
 
-    await logActivity(user.id, "document_deleted", `Deleted document: ${document.name}`, document.case_id)
+    if (document.storage_path) {
+      await deleteCaseDocument(document.storage_path)
+    }
+
+    await logActivity(user.organization_id, user.id, "document_deleted", `Deleted document: ${document.name}`, document.case_id)
 
     return NextResponse.json({ success: true })
   } catch (error) {

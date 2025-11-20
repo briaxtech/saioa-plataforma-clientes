@@ -1,14 +1,20 @@
-import { neon } from "@neondatabase/serverless"
+import postgres from "postgres"
 
-if (!process.env.DATABASE_URL) {
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) {
   throw new Error("DATABASE_URL environment variable is not set")
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+const sqlInstance = postgres(databaseUrl, {
+  ssl: databaseUrl.includes("localhost") ? false : "require",
+})
 
-// Helper function to log database activities
+export const sql = sqlInstance
+;(sql as any).query = (text: string, params?: any[]) => sql.unsafe(text, params ?? [])
+
 export async function logActivity(
-  userId: string,
+  organizationId: string,
+  userId: string | null,
   action: string,
   description: string,
   caseId?: number,
@@ -16,16 +22,16 @@ export async function logActivity(
 ) {
   try {
     await sql`
-      INSERT INTO activity_logs (user_id, case_id, action, description, metadata)
-      VALUES (${userId}, ${caseId || null}, ${action}, ${description}, ${JSON.stringify(metadata || {})})
+      INSERT INTO activity_logs (organization_id, user_id, case_id, action, description, metadata)
+      VALUES (${organizationId}, ${userId || null}, ${caseId || null}, ${action}, ${description}, ${JSON.stringify(metadata || {})})
     `
   } catch (error) {
     console.error("[v0] Failed to log activity:", error)
   }
 }
 
-// Helper function to create notifications
 export async function createNotification(
+  organizationId: string,
   userId: string,
   title: string,
   message: string,
@@ -34,8 +40,8 @@ export async function createNotification(
 ) {
   try {
     await sql`
-      INSERT INTO notifications (user_id, title, message, type, related_case_id)
-      VALUES (${userId}, ${title}, ${message}, ${type || "general"}, ${caseId || null})
+      INSERT INTO notifications (organization_id, user_id, title, message, type, related_case_id)
+      VALUES (${organizationId}, ${userId}, ${title}, ${message}, ${type || "general"}, ${caseId || null})
     `
   } catch (error) {
     console.error("[v0] Failed to create notification:", error)

@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
       FROM messages m
       LEFT JOIN users sender ON m.sender_id = sender.id
       LEFT JOIN users receiver ON m.receiver_id = receiver.id
-      WHERE 1=1
+      WHERE m.organization_id = $1
     `
 
-    const params: any[] = []
+    const params: any[] = [user.organization_id]
 
     if (caseId) {
       query += ` AND m.case_id = $${params.length + 1}`
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     query += " ORDER BY m.created_at DESC"
 
-    const messages = await sql.query(query, params)
+    const messages = await sql.unsafe(query, params)
 
     return NextResponse.json({ messages })
   } catch (error) {
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       SELECT c.*, client.name as client_name
       FROM cases c
       LEFT JOIN users client ON c.client_id = client.id
-      WHERE c.id = ${case_id}
+      WHERE c.id = ${case_id} AND c.organization_id = ${user.organization_id}
     `
 
     if (cases.length === 0) {
@@ -85,21 +85,22 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await sql`
-      INSERT INTO messages (case_id, sender_id, receiver_id, subject, content)
-      VALUES (${case_id}, ${user.id}, ${receiver_id}, ${subject || null}, ${content})
+      INSERT INTO messages (organization_id, case_id, sender_id, receiver_id, subject, content)
+      VALUES (${user.organization_id}, ${case_id}, ${user.id}, ${receiver_id}, ${subject || null}, ${content})
       RETURNING *
     `
 
     const message = result[0]
 
     // Log activity
-    await logActivity(user.id, "message_sent", `Sent message to ${receiver_id}`, Number(case_id))
+    await logActivity(user.organization_id, user.id, "message_sent", `Sent message to ${receiver_id}`, Number(case_id))
 
     // Create notification for receiver
     await createNotification(
+      user.organization_id,
       receiver_id,
-      "New Message",
-      `You have a new message from ${user.name}${subject ? `: ${subject}` : ""}`,
+      "Nuevo mensaje",
+      `Tienes un nuevo mensaje de ${user.name}${subject ? `: ${subject}` : ""}`,
       "message",
       Number(case_id),
     )

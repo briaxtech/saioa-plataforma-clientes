@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import Link from "next/link"
 import { useState } from "react"
@@ -9,8 +9,14 @@ import useSWR from "swr"
 import { api } from "@/lib/api-client"
 import { CaseStatusBadge } from "@/components/case-status-badge"
 import { PriorityBadge } from "@/components/priority-badge"
+import { cn } from "@/lib/utils"
 
-export function CasesList() {
+interface CasesListProps {
+  variant?: "card" | "plain"
+  className?: string
+}
+
+export function CasesList({ variant = "card", className }: CasesListProps) {
   const [searchTerm, setSearchTerm] = useState("")
 
   const { data, isLoading } = useSWR("/api/cases", () => api.getCases())
@@ -25,8 +31,8 @@ export function CasesList() {
     )
   })
 
-  return (
-    <Card className="p-6">
+  const content = (
+    <>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-semibold text-foreground">Casos activos</h2>
         <Button variant="outline" className="w-full sm:w-auto">
@@ -51,60 +57,71 @@ export function CasesList() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredCases.map((caseItem: any) => (
-            <Link
-              href={`/admin/cases/${caseItem.id}`}
-              key={caseItem.id}
-              className="block rounded-2xl border border-border p-4 transition hover:border-primary/40 hover:bg-muted/40"
-            >
-              <div className="mb-3 flex items-start justify-between">
-                <div>
-                  <div className="mb-1 flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-foreground">{caseItem.client_name}</h3>
-                    <CaseStatusBadge status={caseItem.status} />
-                  </div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {caseItem.case_number}
-                  </p>
-                </div>
-                <PriorityBadge priority={caseItem.priority} />
-              </div>
+          {filteredCases.map((caseItem: any) => {
+            const clientId = caseItem.client_id ?? caseItem.clientId
+            const caseHref = clientId ? `/admin/clients/${clientId}/cases/${caseItem.id}` : `/admin/cases/${caseItem.id}`
 
-              <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">{caseItem.title}</span>
-                </div>
-
-                <div>
-                  <div className="mb-2 flex justify-between">
-                    <span className="text-xs text-muted-foreground">Progreso</span>
-                    <span className="text-xs font-medium text-foreground">{caseItem.progress_percentage}%</span>
+            return (
+              <Link
+                href={caseHref}
+                key={caseItem.id}
+                className="block rounded-2xl border border-border p-4 transition hover:border-primary/40 hover:bg-muted/40"
+              >
+                <div className="mb-3 flex items-start justify-between">
+                  <div>
+                    <div className="mb-1 flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-foreground">{caseItem.client_name}</h3>
+                      <CaseStatusBadge status={caseItem.status} />
+                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {caseItem.case_number}
+                    </p>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${caseItem.progress_percentage}%` }}
-                    />
-                  </div>
+                  <PriorityBadge priority={caseItem.priority} />
                 </div>
 
-                {caseItem.deadline_date && (
-                  <p className="text-xs text-muted-foreground">
-                    Proximo vencimiento:{" "}
-                    <span className="font-medium text-foreground">
-                      {new Date(caseItem.deadline_date).toLocaleDateString()}
-                    </span>
-                  </p>
-                )}
-              </div>
-            </Link>
-          ))}
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{caseItem.title}</span>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex justify-between">
+                      <span className="text-xs text-muted-foreground">Progreso</span>
+                      <span className="text-xs font-medium text-foreground">{caseItem.progress_percentage}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${caseItem.progress_percentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {caseItem.deadline_date && (
+                    <p className="text-xs text-muted-foreground">
+                      Proximo vencimiento:{" "}
+                      <span className="font-medium text-foreground">
+                        {new Date(caseItem.deadline_date).toLocaleDateString()}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
 
           {filteredCases.length === 0 && !isLoading && (
             <div className="py-8 text-center text-muted-foreground">No se encontraron casos</div>
           )}
         </div>
       )}
-    </Card>
+    </>
   )
+
+  if (variant === "plain") {
+    return <div className={className}>{content}</div>
+  }
+
+  return <Card className={cn("p-6", className)}>{content}</Card>
 }

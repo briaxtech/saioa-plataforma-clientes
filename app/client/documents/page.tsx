@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
+import { canOpenDocumentFile, documentHasFile, getDocumentFileUrl } from "@/lib/document-helpers"
 import { Upload, FileText } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -16,11 +17,11 @@ const DOCUMENT_STATUS_STYLES: Record<string, { label: string; className: string 
     className: "bg-amber-500/10 text-amber-700",
   },
   submitted: {
-    label: "Enviado",
+    label: "En revisión",
     className: "bg-blue-500/10 text-blue-700",
   },
   approved: {
-    label: "Verificado",
+    label: "Validado",
     className: "bg-green-500/10 text-green-700",
   },
   rejected: {
@@ -28,8 +29,12 @@ const DOCUMENT_STATUS_STYLES: Record<string, { label: string; className: string 
     className: "bg-red-500/10 text-red-600",
   },
   requires_action: {
-    label: "Requiere revision",
+    label: "Requiere reentrega",
     className: "bg-rose-500/10 text-rose-600",
+  },
+  not_required: {
+    label: "No requerido",
+    className: "bg-slate-200 text-slate-600",
   },
 }
 
@@ -126,8 +131,30 @@ export default function DocumentsPage() {
   const requiredDocuments = documentsForCurrentCase.filter((doc: any) => doc.is_required)
   const standaloneDocuments = documentsForCurrentCase.filter((doc: any) => !doc.is_required)
 
+  const canUploadRequirement = (doc: any) => doc && ["pending", "requires_action"].includes(doc.status)
+
   const handleRequirementFile = (doc: any) => (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
+      if (!canUploadRequirement(doc)) {
+        toast({
+          title: "Documento en revisión",
+          description: "Esperá a que el equipo revise o pida una nueva versión antes de reemplazar el archivo.",
+          variant: "default",
+        })
+        event.target.value = ""
+        return
+      }
+
+      if (doc.status === "pending") {
+        const confirmed = window.confirm(
+          "Una vez que envíes este archivo no podrás cambiarlo hasta que el equipo lo revise. ¿Deseas continuar?",
+        )
+        if (!confirmed) {
+          event.target.value = ""
+          return
+        }
+      }
+
       handleFileUpload(event.target.files, { documentId: doc.id.toString(), overrideName: doc.name })
       event.target.value = ""
     }
@@ -192,7 +219,10 @@ export default function DocumentsPage() {
           <div className="space-y-4">
             {requiredDocuments.map((doc: any) => {
               const statusConfig = DOCUMENT_STATUS_STYLES[doc.status] || DOCUMENT_STATUS_STYLES.pending
-              const hasFile = Boolean(doc.file_url)
+              const hasFile = documentHasFile(doc)
+              const fileUrl = getDocumentFileUrl(doc)
+              const canUpload = canUploadRequirement(doc)
+              const uploadLabel = doc.status === "requires_action" ? "Subir nueva versión" : "Subir archivo"
               return (
                 <div
                   key={doc.id}
@@ -210,22 +240,50 @@ export default function DocumentsPage() {
                       {statusConfig.label}
                     </span>
                   </div>
+                  {doc.description && (
+                    <p className="mt-2 text-sm text-amber-800">Instrucciones: {doc.description}</p>
+                  )}
                   {doc.review_notes && (
                     <p className="mt-3 text-sm text-rose-600">Nota del equipo: {doc.review_notes}</p>
                   )}
+                  {doc.status === "requires_action" && (
+                    <p className="mt-2 text-xs text-rose-700">
+                      Necesitamos una nueva versión de este archivo. Subila con el botón de “{uploadLabel}”.
+                    </p>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {doc.file_url && (
-                      <Button size="sm" variant="ghost" onClick={() => window.open(doc.file_url, "_blank")}>
+                    {fileUrl && canOpenDocumentFile(doc.status) && (
+                      <Button size="sm" variant="ghost" onClick={() => window.open(fileUrl, "_blank")}>
                         Ver archivo
                       </Button>
                     )}
-                    <label>
-                      <input type="file" className="hidden" onChange={handleRequirementFile(doc)} />
-                      <Button size="sm" variant={hasFile ? "outline" : "default"} disabled={uploading}>
-                        {hasFile ? "Reemplazar archivo" : "Subir archivo"}
+                    {doc.status === "not_required" ? (
+                      <span className="text-xs text-muted-foreground">Este documento ya no es necesario.</span>
+                    ) : canUpload ? (
+                      <label>
+                        <input type="file" className="hidden" onChange={handleRequirementFile(doc)} disabled={uploading} />
+                        <Button size="sm" variant={hasFile ? "outline" : "default"} disabled={uploading}>
+                          {uploadLabel}
+                        </Button>
+                      </label>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled>
+                        {doc.status === "approved"
+                          ? "Validado"
+                          : doc.status === "submitted"
+                            ? "En revisión"
+                            : "No disponible"}
                       </Button>
-                    </label>
+                    )}
                   </div>
+                  {!canUpload && doc.status === "submitted" && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Estamos revisando tu archivo. Te avisaremos si necesitamos que subas una nueva versión.
+                    </p>
+                  )}
+                  {!canUpload && doc.status === "approved" && (
+                    <p className="mt-2 text-xs text-emerald-700">Archivo aprobado. No necesitás realizar acciones.</p>
+                  )}
                 </div>
               )
             })}
@@ -241,6 +299,7 @@ export default function DocumentsPage() {
           <div className="space-y-3">
             {standaloneDocuments.map((doc: any) => {
               const statusConfig = DOCUMENT_STATUS_STYLES[doc.status] || DOCUMENT_STATUS_STYLES.pending
+              const fileUrl = getDocumentFileUrl(doc)
               return (
                 <div
                   key={doc.id}
@@ -260,8 +319,8 @@ export default function DocumentsPage() {
                     <span className={`rounded px-2 py-1 text-xs font-medium ${statusConfig.className}`}>
                       {statusConfig.label}
                     </span>
-                    {doc.file_url && (
-                      <Button size="sm" variant="ghost" onClick={() => window.open(doc.file_url, "_blank")}>
+                    {fileUrl && canOpenDocumentFile(doc.status) && (
+                      <Button size="sm" variant="ghost" onClick={() => window.open(fileUrl, "_blank")}>
                         Ver
                       </Button>
                     )}

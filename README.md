@@ -1,28 +1,24 @@
-# Sentir Extranjero - Portal de extranjeria y nacionalidad
+# Saioa Platform - Portal multi-tenant de casos y clientes
 
-Plataforma full-stack basada en Next.js 16 para que el equipo de Sentir Extranjero gestione expedientes, documentos y comunicaciones de clientes que tramitan su residencia o nacionalidad en Espana.
+Plataforma construida con Next.js 16 y Prisma para que agencias y estudios gestionen sus expedientes en un entorno multi-tenant: cada organización mantiene su branding, usuarios y casos mientras la infraestructura (base de datos y storage) se administra centralmente.
 
 ## Caracteristicas principales
 
-### Espacio para el equipo
-- **Panel unificado** con resumen de casos activos, documentos pendientes y actividad reciente.
-- **Gestion de expedientes** con progreso, hitos y prioridades.
-- **Directorio de clientes** con notas internas y asignacion de responsables.
-- **Revision documental** para aprobar, rechazar o solicitar cambios directamente desde la app.
-- **Bitacora y alertas** que registran cada accion y anticipan vencimientos.
+- **Espacios aislados**: usuarios, clientes, casos, plantillas y mensajes separados por `organization_id`.
+- **Tableros para equipo y clientes**: panel administrativo para staff y portal de clientes para seguimiento, mensajes y documentos.
+- **Documentos en Supabase Storage**: reemplaza carpetas de terceros; todos los archivos viven en un bucket controlado por la agencia y se sirven con URLs firmadas.
+- **Fechas clave + recordatorios**: recordatorios por correo y sincronizacion opcional con Google Calendar mediante cuenta de servicio.
+- **Autenticacion NextAuth**: sesiones JWT con provider de credenciales contra la base Postgres/Supabase, incluyendo datos de la organizacion activa.
+- **Automatizaciones**: cron jobs protegidos por `CRON_SECRET_KEY` y webhook opcional hacia n8n para analisis de documentos o workflows extra.
 
-### Portal de clientes
-- **Seguimiento en tiempo real** del estado del tramite y su cronologia.
-- **Carga de documentos** segura y guiada por categoria.
-- **Mensajeria directa** con el equipo de Sentir Extranjero.
-- **Recordatorios proactivos** sobre hitos y tareas pendientes.
+## Stack
 
-### Base tecnica
-- Next.js 16 (App Router) + React 19
-- Neon PostgreSQL como base de datos principal
-- Autenticacion basada en cookies y contexto propio
-- SWR para consultas reactivas
-- Tailwind CSS 4 con sistema de diseno personalizado inspirado en sentirextranjero.com
+- **Frontend**: Next.js 16 (App Router), React 19, SWR, Tailwind CSS 4, shadcn/ui.
+- **Backend**: API Routes con Prisma + PostgreSQL (Neon/Supabase).
+- **Autenticacion**: NextAuth (estrategia JWT + Credentials provider).
+- **Storage**: Supabase buckets para uploads/descargas.
+- **Emails / notificaciones**: Resend.
+- **Automations**: Cron jobs + integraciones opcionales (n8n, Stack).
 
 ## Puesta en marcha
 
@@ -30,44 +26,54 @@ Plataforma full-stack basada en Next.js 16 para que el equipo de Sentir Extranje
    ```bash
    npm install
    ```
-2. **Migrar base de datos (Neon conectada)**
-   - `scripts/01-create-tables.sql`
-   - `scripts/02-seed-data.sql`
-3. **Variables de entorno**
-   - `DATABASE_URL`, `POSTGRES_URL` (preconfiguradas)
-   - Opcionales para Google Drive: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `NEXT_PUBLIC_APP_URL`
+2. **Configurar variables**
+   - Copia `.env.example` a `.env` y completa cada bloque (ver tabla **Variables clave**).
+3. **Preparar base de datos**
+   ```bash
+   npx prisma migrate deploy
+   npm run db:seed   # crea organizacion demo, usuarios y casos
+   ```
 4. **Iniciar entorno local**
    ```bash
    npm run dev
    ```
 
-## Credenciales de demostracion
+## Variables clave
 
-### Equipo / Administracion
-- **Email**: `admin@sentirextranjero.com`
-- **Password**: `demo123`
+| Grupo | Variables |
+| ----- | --------- |
+| **App / Auth** | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_SUPPORT_EMAIL`, `NEXTAUTH_URL`, `AUTH_SECRET` |
+| **Database** | `DATABASE_URL` (Neon / Supabase Postgres) |
+| **Supabase storage** | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` |
+| **Google Calendar (opcional)** | `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_CALENDAR_ID` |
+| **Automatizaciones** | `CRON_SECRET_KEY`, `N8N_DOCUMENT_REVIEW_WEBHOOK_URL` (o `N8N_WEBHOOK_URL`) |
+| **Emails** | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` |
+| **Integraciones opcionales** | `STACK_SECRET_SERVER_KEY` |
 
-### Clientes
-- `ana.garcia@email.com`
-- `carlos.ramirez@email.com`
-- `fatima.ali@email.com`
-- `valentina.gomez@email.com`
+> `AUTH_SECRET` es obligatorio para firmar los JWT de NextAuth. `NEXTAUTH_URL` debe apuntar al dominio publico cuando se despliegue.
 
-Todas las cuentas de clientes usan `demo123` como password por defecto.
+## Credenciales demo
 
-## Esquema principal
+- **Equipo / staff**
+  - Email: `admin@demo.com`
+  - Password: `demo123`
+- **Clientes** (todos usan `demo123`): `ana.garcia@email.com`, `carlos.ramirez@email.com`, etc.
 
-- `users`, `clients`, `cases`, `case_milestones`, `documents`, `messages`, `notifications`, `activity_logs`
-- Enums para `case_status`, `case_type`, `priority_level`, `document_status`, `user_role`
+## Consideraciones multi-tenant
 
-## Endpoints destacados
+- Todas las rutas del backend validan `organization_id` antes de leer/escribir (`lib/db` + helpers en `lib/auth`).
+- Los documentos se guardan en Supabase bajo la ruta `${organizationId}/cases/${caseId}/...` y se sirven con URLs firmadas temporales.
+- Notificaciones, actividad, contactos, fechas clave y plantillas consultan siempre la organizacion activa para garantizar aislamiento.
+- El branding por agencia se controla con `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_SUPPORT_EMAIL` y los assets/colores en `public/` y `app/globals.css`.
 
-- `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
-- `GET /api/cases`, `GET /api/cases/[id]`, `POST /api/cases`, `PATCH /api/cases/[id]`
-- `GET /api/clients`, `GET /api/clients/[id]`
-- `GET /api/documents`, `POST /api/documents`, `PATCH /api/documents/[id]`
-- `GET /api/messages`, `POST /api/messages`, `PATCH /api/messages/[id]`
-- `GET /api/notifications`, `POST /api/notifications/[id]/read`, `POST /api/notifications/read-all`
-- `GET /api/stats`, `GET /api/activity`
+## Scripts utiles
 
-La estructura y los componentes UI ahora replican la estetica, colores y activos de sentirextranjero.com, facilitando una transicion transparente para el cliente.
+- `npm run lint` – chequeo de calidad.
+- `npm run db:seed` – regenera datos demo.
+- `npm run build && npm run start` – build/productivo.
+
+## Proximos pasos sugeridos
+
+- Configurar dominios personalizados por tenant (middleware/rewrites).
+- Extender plantillas y tarifas especificas por organizacion.
+- Conectar cron jobs a tu scheduler preferido (Vercel Cron, Supabase Edge Functions, etc.).

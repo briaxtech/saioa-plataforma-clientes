@@ -1,13 +1,16 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import useSWR from "swr"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Mail, Phone, MapPin, Users, FileText, Calendar, Clock, FolderOpen, ArrowUpRight } from "lucide-react"
-import { apiClient } from "@/lib/api-client"
+import { Textarea } from "@/components/ui/textarea"
+import { Archive, ArrowUpRight, Calendar, Clock, Loader2, Mail, MapPin, Phone, Users } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { api, apiClient } from "@/lib/api-client"
 
 const PRIORITY_BADGE_STYLES: Record<string, string> = {
   low: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -42,10 +45,70 @@ export default function ClientDetailPage() {
   const params = useParams<{ clientId: string }>()
   const clientId = Array.isArray(params?.clientId) ? params?.clientId[0] : params?.clientId
 
-  const { data, isLoading } = useSWR(clientId ? `/api/clients/${clientId}` : null, (url: string) => apiClient.get(url))
+  const { data, isLoading, mutate } = useSWR(clientId ? `/api/clients/${clientId}` : null, (url: string) => apiClient.get(url))
+  const { toast } = useToast()
+  const [isArchiving, setIsArchiving] = useState(false)
+  const [notesValue, setNotesValue] = useState("")
+  const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [notesSynced, setNotesSynced] = useState(false)
   const client = data?.client
   const cases = Array.isArray(client?.cases) ? client?.cases : []
-  const primaryCase = cases[0]
+
+  useEffect(() => {
+    if (typeof client?.notes === "undefined") return
+    setNotesValue(client?.notes ?? "")
+    setNotesSynced(true)
+  }, [client?.notes])
+
+  const handleArchiveClient = async () => {
+    if (!client) return
+    const targetId = client.user_id || client.id
+    if (!targetId) return
+
+    const confirmed = window.confirm(
+      `¿Seguro que deseas mover a ${client.name} al archivo? Podrás restaurarlo desde la sección Archivo cuando lo necesites.`,
+    )
+    if (!confirmed) return
+
+    setIsArchiving(true)
+    try {
+      await api.updateClient(String(targetId), { archived: true })
+      toast({ title: `${client.name} ahora está en Archivo.` })
+      await mutate()
+    } catch (error: any) {
+      toast({
+        title: "No pudimos archivar al cliente",
+        description: error?.message || "Intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsArchiving(false)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!client) return
+    const targetId = client.user_id || client.id
+    if (!targetId) return
+
+    const trimmed = notesValue.trim()
+    const payload = trimmed.length === 0 ? null : notesValue
+
+    setIsSavingNotes(true)
+    try {
+      await api.updateClient(String(targetId), { notes: payload })
+      toast({ title: "Notas internas actualizadas." })
+      await mutate()
+    } catch (error: any) {
+      toast({
+        title: "No pudimos guardar las notas",
+        description: error?.message || "Intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingNotes(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -67,6 +130,10 @@ export default function ClientDetailPage() {
     )
   }
 
+  const normalizedClientNotes = client.notes ?? ""
+  const notesChanged = notesSynced ? notesValue !== normalizedClientNotes : false
+  const canSaveNotes = notesSynced && notesChanged
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -77,19 +144,9 @@ export default function ClientDetailPage() {
           <h1 className="mt-3 text-3xl font-semibold text-foreground">{client.name}</h1>
           <p className="text-sm text-muted-foreground">Cliente #{client.user_id || client.id}</p>
         </div>
-        {primaryCase && client.id && (
-          <Link href={`/admin/clients/${client.id}/cases/${primaryCase.id}`}>
-            <Button>Ver expediente</Button>
-          </Link>
-        )}
-        {client.notes && (
-          <Badge variant="secondary" className="self-start text-xs uppercase">
-            Notas activas
-          </Badge>
-        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
         <Card className="p-6 space-y-4">
           <h2 className="text-lg font-semibold text-foreground">Informacion de contacto</h2>
           <div className="space-y-3 text-sm text-muted-foreground">
@@ -119,12 +176,23 @@ export default function ClientDetailPage() {
         </Card>
 
         <Card className="p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-foreground">Notas internas</h2>
-          {client.notes ? (
-            <p className="text-sm text-muted-foreground">{client.notes}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Sin notas registradas.</p>
-          )}
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Notas internas</h2>
+            <p className="text-sm text-muted-foreground">Solo visibles para el equipo administrador.</p>
+          </div>
+          <Textarea
+            value={notesValue}
+            onChange={(event) => setNotesValue(event.target.value)}
+            placeholder="Registra acuerdos internos, contexto o seguimientos pendientes."
+            className="min-h-[140px]"
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">Estas notas no se comparten con el cliente.</p>
+            <Button onClick={handleSaveNotes} disabled={!canSaveNotes || isSavingNotes}>
+              {isSavingNotes && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar notas
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -141,7 +209,6 @@ export default function ClientDetailPage() {
         ) : (
           <div className="space-y-5">
             {cases.map((caseItem: any) => {
-              const documents = Array.isArray(caseItem.documents) ? caseItem.documents : []
               const milestones = Array.isArray(caseItem.milestones) ? caseItem.milestones : []
               const progressValue = clampProgress(caseItem.progress_percentage)
 
@@ -253,37 +320,6 @@ export default function ClientDetailPage() {
                         </div>
                       )}
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase">Documentos</p>
-                        {documents.length === 0 ? (
-                          <p className="mt-2 text-sm text-muted-foreground">Sin documentos cargados.</p>
-                        ) : (
-                          <ul className="mt-2 space-y-2">
-                            {documents.slice(0, 3).map((doc: any) => (
-                              <li
-                                key={`${caseItem.id}-${doc.id}`}
-                                className="flex items-center justify-between rounded-xl border border-dashed border-border/70 px-3 py-2"
-                              >
-                                <div>
-                                  <p className="font-medium text-foreground">{doc.name}</p>
-                                  <p className="text-xs text-muted-foreground">{formatLabel(doc.status)}</p>
-                                </div>
-                                <Button variant="ghost" size="sm" asChild>
-                                  <a href={doc.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">
-                                    <FolderOpen className="h-4 w-4" />
-                                    Abrir
-                                  </a>
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {documents.length > 3 && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            +{documents.length - 3} documentos adicionales en este caso.
-                          </p>
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -291,13 +327,12 @@ export default function ClientDetailPage() {
                     <span>
                       Ultimo movimiento: <strong className="text-foreground">{formatDate(caseItem.updated_at)}</strong>
                     </span>
-                    <Link
-                      href={`/admin/clients/${client.id}/cases/${caseItem.id}`}
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
-                    >
-                      Ver caso completo
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
+                    <Button asChild size="sm" className="gap-1">
+                      <Link href={`/admin/clients/${client.id}/cases/${caseItem.id}`} className="inline-flex items-center">
+                        Ver caso completo
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               )
@@ -306,32 +341,44 @@ export default function ClientDetailPage() {
         )}
       </Card>
 
-      <Card className="p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold text-foreground">Documentos recibidos</h2>
+      <Card className="space-y-4 border border-dashed border-amber-200 bg-amber-50/40 p-6">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Mover al archivo</h2>
+          <p className="text-sm text-amber-900">
+            Usa esta acción cuando el caso ya no requiera seguimiento activo. Podrás restaurarlo desde la sección Archivo si
+            vuelve a ser necesario.
+          </p>
         </div>
-        {cases.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin documentos registrados todavia.</p>
-        ) : (
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {cases.flatMap((caseItem: any) =>
-              (caseItem.documents || []).map((doc: any) => (
-                <li key={`${caseItem.id}-${doc.id}`} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
-                  <div>
-                    <p className="font-medium text-foreground">{doc.name}</p>
-                    <p className="text-xs">{doc.status}</p>
-                  </div>
-                  <Button variant="ghost" size="sm" asChild>
-                    <a href={doc.file_url} target="_blank" rel="noreferrer">
-                      Abrir
-                    </a>
-                  </Button>
-                </li>
-              )),
-            )}
-          </ul>
-        )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {client.archived_at ? (
+            <Badge variant="secondary" className="w-full justify-center sm:w-auto">
+              {`Archivado el ${formatDate(client.archived_at)}`}
+            </Badge>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2 border-amber-300 text-amber-900 hover:bg-amber-100 sm:w-auto"
+              onClick={handleArchiveClient}
+              disabled={isArchiving}
+            >
+              {isArchiving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Archivando...
+                </>
+              ) : (
+                <>
+                  <Archive className="h-4 w-4" />
+                  Mover a archivo
+                </>
+              )}
+            </Button>
+          )}
+          <p className="text-xs text-amber-900">
+            Esta acción no elimina al usuario; sólo lo oculta del panel principal.
+          </p>
+        </div>
       </Card>
     </div>
   )

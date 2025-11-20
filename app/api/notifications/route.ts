@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
 
     let query = `
       SELECT * FROM notifications
-      WHERE user_id = $1
+      WHERE user_id = $1 AND organization_id = $2
     `
 
-    const params: any[] = [user.id]
+    const params: any[] = [user.id, user.organization_id]
 
     if (unreadOnly) {
       query += " AND is_read = false"
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     query += " ORDER BY created_at DESC LIMIT 50"
 
-    const notifications = await sql.query(query, params)
+    const notifications = await sql.unsafe(query, params)
 
     return NextResponse.json({ notifications })
   } catch (error) {

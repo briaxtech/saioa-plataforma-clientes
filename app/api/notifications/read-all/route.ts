@@ -12,7 +12,7 @@ export async function POST() {
     await sql`
       UPDATE notifications
       SET is_read = true
-      WHERE user_id = ${user.id} AND is_read = false
+      WHERE user_id = ${user.id} AND organization_id = ${user.organization_id} AND is_read = false
     `
 
     return NextResponse.json({ success: true })

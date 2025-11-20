@@ -2,29 +2,27 @@
 
 import Link from "next/link"
 import useSWR from "swr"
-import { LifeBuoy, MessageSquare, Upload, UserRound } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { api } from "@/lib/api-client"
+import { useAuth } from "@/lib/auth-context"
+
+const DEFAULT_APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
 
 export default function ClientDashboard() {
   const { data: casesData } = useSWR("/api/cases", () => api.getCases())
+  const { organization } = useAuth()
+  const workspaceName = organization?.name || DEFAULT_APP_NAME
 
   const cases = casesData?.cases || []
   const mainCase = cases[0]
-
-  const { data: caseDetail } = useSWR(mainCase ? `/api/cases/${mainCase.id}` : null, () =>
-    mainCase ? api.getCase(mainCase.id) : null,
-  )
-
-  const timeline = caseDetail?.case?.milestones || []
 
   if (!mainCase) {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Bienvenido de nuevo a Sentir Extranjero</h1>
-          <p className="mt-2 text-muted-foreground">Aqui encontraremos toda la informacion clave de tu tramite.</p>
+          <h1 className="text-3xl font-bold text-foreground">Bienvenido de nuevo a {workspaceName}</h1>
+          <p className="mt-2 text-muted-foreground">Aquí encontraremos toda la información clave de tu trámite.</p>
         </div>
         <Card className="animate-pulse p-8">
           <div className="h-48 rounded bg-muted" />
@@ -37,8 +35,8 @@ export default function ClientDashboard() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Bienvenido de nuevo a Sentir Extranjero</h1>
-        <p className="mt-2 text-muted-foreground">Aqui veras el estado de tus gestiones y las acciones prioritarias.</p>
+        <h1 className="text-3xl font-bold text-foreground">Bienvenido de nuevo a {workspaceName}</h1>
+        <p className="mt-2 text-muted-foreground">Aquí verás el estado de tus gestiones y las acciones prioritarias.</p>
       </div>
 
       {/* Main Case Card */}
@@ -86,83 +84,13 @@ export default function ClientDashboard() {
               </div>
             )}
 
-            <Link href="/client/cases">
+            <Link href={`/client/cases/${mainCase.id}`}>
               <Button className="mt-4 w-full bg-primary hover:bg-primary/90">Ver detalles completos</Button>
             </Link>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Timeline */}
-        <div className="lg:col-span-2">
-          <Card className="p-6">
-            <h3 className="mb-6 text-lg font-semibold text-foreground">Cronologia del caso</h3>
-            <div className="space-y-4">
-              {timeline.map((item: any, index: number) => (
-                <div key={item.id} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className={`h-3 w-3 rounded-full ${item.completed ? "bg-accent" : "bg-muted"}`} />
-                    {index < timeline.length - 1 && <div className="my-1 h-12 w-0.5 bg-border" />}
-                  </div>
-                  <div className="pb-4">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    {item.description && <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>}
-                    {item.due_date && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(item.due_date).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* Attorney Contact */}
-        <Card className="p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">Tu abogado</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <UserRound className="h-6 w-6" />
-              </div>
-              <h4 className="font-semibold text-foreground">{mainCase.staff_name || "Sin asignar"}</h4>
-            </div>
-            <Link href="/client/messages">
-              <Button variant="outline" className="w-full bg-transparent">
-                Enviar mensaje
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Link href="/client/documents">
-          <Card className="h-full cursor-pointer p-6 transition hover:bg-muted/50">
-            <Upload className="mb-3 h-6 w-6 text-primary" />
-            <h3 className="mb-1 font-semibold text-foreground">Subir documentos</h3>
-            <p className="text-sm text-muted-foreground">Envia los documentos requeridos para tu caso</p>
-          </Card>
-        </Link>
-
-        <Link href="/client/messages">
-          <Card className="h-full cursor-pointer p-6 transition hover:bg-muted/50">
-            <MessageSquare className="mb-3 h-6 w-6 text-primary" />
-            <h3 className="mb-1 font-semibold text-foreground">Mensajes</h3>
-            <p className="text-sm text-muted-foreground">Comunicate con tu abogado</p>
-          </Card>
-        </Link>
-
-        <Card className="h-full p-6">
-          <LifeBuoy className="mb-3 h-6 w-6 text-primary" />
-          <h3 className="mb-1 font-semibold text-foreground">Soporte</h3>
-          <p className="text-sm text-muted-foreground">Contactanos para recibir ayuda</p>
-        </Card>
-      </div>
     </div>
   )
 }

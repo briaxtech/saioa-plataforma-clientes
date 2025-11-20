@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const result = await sql`
       UPDATE messages
       SET status = 'read', read_at = NOW()
-      WHERE id = ${id} AND receiver_id = ${user.id}
+      WHERE id = ${id} AND receiver_id = ${user.id} AND organization_id = ${user.organization_id}
       RETURNING *
     `
 

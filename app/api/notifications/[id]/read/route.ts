@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const result = await sql`
       UPDATE notifications
       SET is_read = true
-      WHERE id = ${id} AND user_id = ${user.id}
+      WHERE id = ${id} AND user_id = ${user.id} AND organization_id = ${user.organization_id}
       RETURNING *
     `
 
