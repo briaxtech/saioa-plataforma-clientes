@@ -78,7 +78,8 @@
 }
 
 @theme inline {
-  --font-sans: "Geist", "Geist Fallback";
+  --font-sans: var(--font-inter), sans-serif;
+  --font-display: var(--font-inter-tight), sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -125,7 +126,83 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@theme inline {
+  --color-brand-purple: #7c3aed;
+  --color-brand-blue: #2563eb;
+  --color-brand-cyan: #06b6d4;
+  --color-brand-dark: #020204;
+  --color-tech-border: #1f2937;
+  --image-gradient-glow: conic-gradient(from 180deg at 50% 50%, #2a8af6 0deg, #a853ba 180deg, #e92a67 360deg);
+  --image-gradient-dark: linear-gradient(to bottom, #020204, #0f172a);
+  --shadow-neon-purple: 0 0 20px rgba(124, 58, 237, 0.4);
+  --shadow-neon-blue: 0 0 20px rgba(37, 99, 235, 0.4);
+  --shadow-neon-cyan: 0 0 20px rgba(6, 182, 212, 0.4);
+  --shadow-inset-glow: inset 0 0 20px rgba(255, 255, 255, 0.05);
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-border-flow: borderFlow 3s linear infinite;
+}
+
+/* Landing Page Custom Styles */
+.tech-grid {
+  background-size: 50px 50px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+}
+
+.tech-card {
+  background: rgba(10, 10, 12, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.tech-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transition: 0.5s;
+}
+
+.tech-card:hover::before {
+  left: 100%;
+}
+
+.border-glow-purple {
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.3), inset 0 0 10px rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.5);
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+/* Custom Scrollbar for Landing */
+.landing-scroll ::-webkit-scrollbar {
+  width: 6px;
+}
+
+.landing-scroll ::-webkit-scrollbar-track {
+  background: #020204;
+}
+
+.landing-scroll ::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
+.landing-scroll ::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

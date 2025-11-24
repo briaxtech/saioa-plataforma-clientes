@@ -5,9 +5,20 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL environment variable is not set")
 }
 
-const sqlInstance = postgres(databaseUrl, {
-  ssl: databaseUrl.includes("localhost") ? false : "require",
-})
+type GlobalWithSql = typeof globalThis & { _sqlInstance?: ReturnType<typeof postgres> }
+const globalWithSql = globalThis as GlobalWithSql
+
+const sqlInstance =
+  globalWithSql._sqlInstance ||
+  postgres(databaseUrl, {
+    ssl: databaseUrl.includes("localhost") ? false : "require",
+    max: Number(process.env.DATABASE_POOL_SIZE || 5),
+    idle_timeout: 10,
+  })
+
+if (!globalWithSql._sqlInstance) {
+  globalWithSql._sqlInstance = sqlInstance
+}
 
 export const sql = sqlInstance
 ;(sql as any).query = (text: string, params?: any[]) => sql.unsafe(text, params ?? [])

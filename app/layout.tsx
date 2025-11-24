@@ -1,14 +1,16 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Inter, Inter_Tight } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/lib/auth-context"
 import "./globals.css"
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const _geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
+const _geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
+const interTight = Inter_Tight({ subsets: ["latin"], variable: "--font-inter-tight" })
 
 export const metadata: Metadata = {
   title: `${APP_NAME} - Portal de casos y clientes`,
@@ -58,10 +60,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`font-sans antialiased`}>
+      <body className={`${inter.variable} ${interTight.variable} font-sans antialiased`}>
         <AuthProvider>{children}</AuthProvider>
         <Analytics />
       </body>
     </html>
   )
 }
+
