@@ -1,3 +1,5 @@
+"use client"
+
 import { LoginView } from "@/components/login-view"
 import { useParams } from "next/navigation"
 
@@ -7,4 +9,3 @@ export default function TenantLoginPage() {
 
   return <LoginView slug={slug} />
 }
-"use client"
