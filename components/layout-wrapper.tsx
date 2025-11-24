@@ -4,7 +4,7 @@ import type React from "react"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Menu, Repeat, ShieldCheck } from "lucide-react"
+import { Menu, Repeat, ShieldCheck, X } from "lucide-react"
 import { Logo } from "./logo"
 import { AppSidebar } from "./app-sidebar"
 import { OnboardingTour } from "./onboarding-tour"
@@ -23,6 +23,7 @@ export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperPro
   const { user, logout, organization, login } = useAuth()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [demoBannerVisible, setDemoBannerVisible] = useState(true)
   const logoUrl = organization?.branding?.logo_url || organization?.logo_url
 
   useEffect(() => {
@@ -120,29 +121,55 @@ export function LayoutWrapper({ children, userType, navItems }: LayoutWrapperPro
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto px-4 py-6 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-6xl">{children}</div>
+          <main className="flex-1 overflow-y-auto px-4 pb-16 pt-6 sm:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-6xl space-y-6 pb-16">{children}</div>
           </main>
         </div>
       </div>
 
       {demoConfig.isDemo && (
-        <div className="fixed bottom-4 left-4 z-40 flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 shadow-lg shadow-primary/20">
-          <ShieldCheck className="h-4 w-4 text-primary" />
-          <p className="text-sm text-foreground">
-            Modo demo activo. Limite: {demoConfig.limits.uploadsPerDay} archivos/dia (max {demoConfig.limits.maxSizeMb}MB),{" "}
-            {demoConfig.limits.messagesPerDay} mensajes/dia. Archivos se eliminan en {demoConfig.limits.ttlMinutes} min.
-          </p>
-          {canSwitchDemo && (
+        <div className="pointer-events-none fixed bottom-6 left-6 z-40 flex justify-start lg:left-10">
+          {demoBannerVisible ? (
+            <div className="pointer-events-auto flex max-w-xl flex-col gap-3 rounded-2xl border border-primary/40 bg-primary/20 px-4 py-4 text-sm text-foreground shadow-lg shadow-primary/15 backdrop-blur">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex items-center justify-center rounded-full bg-primary/15 p-1 text-primary">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">Modo demo activo</p>
+                    <Button size="icon" variant="ghost" className="text-muted-foreground" onClick={() => setDemoBannerVisible(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-foreground/80">
+                    Limite: {demoConfig.limits.uploadsPerDay} archivos/dia (max {demoConfig.limits.maxSizeMb}MB), {demoConfig.limits.messagesPerDay} mensajes/dia. Archivos se eliminan en {demoConfig.limits.ttlMinutes} min.
+                  </p>
+                  {canSwitchDemo && (
+                    <div className="pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 bg-white/90 text-foreground hover:bg-white"
+                        onClick={() => handleSwitchRole(userType === "admin" ? "client" : "admin")}
+                        disabled={isSwitching}
+                      >
+                        <Repeat className="h-4 w-4" />
+                        {isSwitching ? "Cambiando..." : userType === "admin" ? "Ver como cliente demo" : "Ver como admin demo"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
             <Button
               size="sm"
-              variant="outline"
-              className="gap-2"
-              onClick={() => handleSwitchRole(userType === "admin" ? "client" : "admin")}
-              disabled={isSwitching}
+              className="pointer-events-auto rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
+              onClick={() => setDemoBannerVisible(true)}
             >
-              <Repeat className="h-4 w-4" />
-              {isSwitching ? "Cambiando..." : userType === "admin" ? "Ver como cliente demo" : "Ver como admin demo"}
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Demo activo
             </Button>
           )}
         </div>
