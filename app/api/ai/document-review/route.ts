@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/auth"
 import { sql } from "@/lib/db"
 import { getSignedDocumentUrl } from "@/lib/storage"
 
+const MAX_AI_BYTES = 8 * 1024 * 1024 // 8MB safety limit
+const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
+
 const downloadDocumentFromUrl = async (url: string) => {
   const response = await fetch(url, { cache: "no-store" })
   if (!response.ok) {
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
     if (document_id) {
       const docId = Number(document_id)
       if (Number.isNaN(docId)) {
-        return NextResponse.json({ error: "document_id inválido." }, { status: 400 })
+        return NextResponse.json({ error: "document_id invalido." }, { status: 400 })
       }
 
       const documents = await sql`
@@ -87,6 +90,9 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      if (fileBuffer.length > MAX_AI_BYTES) {
+        return NextResponse.json({ error: "El archivo es demasiado grande para analizar (limite 8MB)." }, { status: 413 })
+      }
       resolvedFileBase64 = fileBuffer.toString("base64")
       resolvedFileType = doc.mime_type || detectedMime || "application/pdf"
       const normalizedName = doc.name || `documento-${doc.id}`
@@ -96,6 +102,15 @@ export async function POST(request: NextRequest) {
 
     if (!resolvedFileBase64 || !resolvedFileName || !resolvedFileType) {
       return NextResponse.json({ error: "Falta el archivo a analizar." }, { status: 400 })
+    }
+
+    // Basic validation for provided base64 payloads
+    const decodedSize = Buffer.from(resolvedFileBase64, "base64").length
+    if (decodedSize > MAX_AI_BYTES) {
+      return NextResponse.json({ error: "El archivo es demasiado grande para analizar (limite 8MB)." }, { status: 413 })
+    }
+    if (resolvedFileType && !ALLOWED_MIME_TYPES.has(resolvedFileType)) {
+      return NextResponse.json({ error: "Tipo de archivo no permitido para analisis (solo PDF o imagenes)." }, { status: 415 })
     }
 
     const webhookUrl =

@@ -40,6 +40,44 @@ export function DocumentUploadZone({
     setIsDragging(false)
   }, [])
 
+  const processFiles = useCallback(
+    (files: File[]) => {
+      const newFiles: UploadedFile[] = files.map((file) => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        status: "uploading" as const,
+      }))
+
+      setUploadedFiles((prev) => [...prev, ...newFiles])
+
+      // Simulate upload progress
+      newFiles.forEach((file) => {
+        const interval = setInterval(() => {
+          setUploadedFiles((prev) =>
+            prev.map((f) => {
+              if (f.id === file.id) {
+                const newProgress = f.progress + 10
+                if (newProgress >= 100) {
+                  clearInterval(interval)
+                  return { ...f, progress: 100, status: "complete" as const }
+                }
+                return { ...f, progress: newProgress }
+              }
+              return f
+            }),
+          )
+        }, 200)
+      })
+
+      if (onUpload) {
+        onUpload(files)
+      }
+    },
+    [onUpload],
+  )
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
@@ -48,7 +86,7 @@ export function DocumentUploadZone({
       const files = Array.from(e.dataTransfer.files)
       processFiles(files)
     },
-    [onUpload],
+    [processFiles],
   )
 
   const handleFileSelect = useCallback(
@@ -56,43 +94,8 @@ export function DocumentUploadZone({
       const files = Array.from(e.target.files || [])
       processFiles(files)
     },
-    [onUpload],
+    [processFiles],
   )
-
-  const processFiles = (files: File[]) => {
-    const newFiles: UploadedFile[] = files.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      size: file.size,
-      progress: 0,
-      status: "uploading" as const,
-    }))
-
-    setUploadedFiles((prev) => [...prev, ...newFiles])
-
-    // Simulate upload progress
-    newFiles.forEach((file) => {
-      const interval = setInterval(() => {
-        setUploadedFiles((prev) =>
-          prev.map((f) => {
-            if (f.id === file.id) {
-              const newProgress = f.progress + 10
-              if (newProgress >= 100) {
-                clearInterval(interval)
-                return { ...f, progress: 100, status: "complete" as const }
-              }
-              return { ...f, progress: newProgress }
-            }
-            return f
-          }),
-        )
-      }, 200)
-    })
-
-    if (onUpload) {
-      onUpload(files)
-    }
-  }
 
   const removeFile = (id: string) => {
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id))

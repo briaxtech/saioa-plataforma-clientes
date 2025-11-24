@@ -2,6 +2,20 @@ import { type NextRequest, NextResponse } from "next/server"
 import { sql, logActivity, createNotification } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 
+const DEMO_DEFAULTS = { uploadsPerDay: 3, messagesPerDay: 10, maxSizeMb: 1, ttlMinutes: 30 }
+
+async function getDemoConfig(organizationId: string) {
+  const orgRows = await sql`
+    SELECT metadata
+    FROM organizations
+    WHERE id = ${organizationId}
+  `
+  const meta = (orgRows[0]?.metadata || {}) as any
+  const isDemo = Boolean(meta?.is_demo || meta?.isDemo)
+  const limits = meta?.demo_limits || meta?.demoLimits || DEMO_DEFAULTS
+  return { isDemo, limits }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
@@ -9,8 +23,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const demoConfig = await getDemoConfig(user.organization_id)
+
     const { searchParams } = new URL(request.url)
     const caseId = searchParams.get("case_id")
+    const limitParam = Number.parseInt(searchParams.get("limit") || "100")
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 200) : 100
 
     let query = `
       SELECT 
@@ -32,7 +50,10 @@ export async function GET(request: NextRequest) {
       params.push(caseId)
     }
 
-    if (user.role === "client") {
+    if (demoConfig.isDemo) {
+      query += ` AND (m.sender_id = $${params.length + 1} OR m.receiver_id = $${params.length + 1})`
+      params.push(user.id)
+    } else if (user.role === "client") {
       query += ` AND (m.sender_id = $${params.length + 1} OR m.receiver_id = $${params.length + 1})`
       params.push(user.id)
     } else if (!caseId) {
@@ -41,6 +62,8 @@ export async function GET(request: NextRequest) {
     }
 
     query += " ORDER BY m.created_at DESC"
+    query += ` LIMIT $${params.length + 1}`
+    params.push(limit)
 
     const messages = await sql.unsafe(query, params)
 
@@ -57,6 +80,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const demoConfig = await getDemoConfig(user.organization_id)
 
     const body = await request.json()
     const { case_id, receiver_id, subject, content } = body
@@ -82,6 +107,24 @@ export async function POST(request: NextRequest) {
     // Verify permissions
     if (user.role === "client" && caseData.client_id !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    if (demoConfig.isDemo) {
+      const dailyRows = await sql`
+        SELECT COUNT(*)::int AS count
+        FROM messages
+        WHERE organization_id = ${user.organization_id}
+          AND sender_id = ${user.id}
+          AND created_at::date = CURRENT_DATE
+      `
+      const dailyCount = dailyRows[0]?.count || 0
+      const limit = demoConfig.limits.messagesPerDay ?? DEMO_DEFAULTS.messagesPerDay
+      if (dailyCount >= limit) {
+        return NextResponse.json(
+          { error: `Limite diario de mensajes alcanzado en modo demo (${limit}).` },
+          { status: 429 },
+        )
+      }
     }
 
     const result = await sql`

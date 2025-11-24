@@ -249,7 +249,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ case: result[0] })
   } catch (error) {
-    console.error("[v0] Failed to update case:", error)
+    console.error("Failed to update case:", error)
     return NextResponse.json({ error: "Failed to update case" }, { status: 500 })
   }
 }

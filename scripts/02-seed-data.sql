@@ -11,13 +11,13 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Insert demo admin user
 INSERT INTO users (id, email, name, role, phone, created_at) VALUES
-(''admin-001'', ''admin@sentirextranjero.com'', ''Coordinacion Sentir'', ''admin'', ''+34910000000'', NOW())
+(''admin-001'', ''admin@demo.com'', ''Admin Demo'', ''admin'', ''+34910000000'', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert demo staff users
 INSERT INTO users (id, email, name, role, phone, created_at) VALUES
-(''staff-001'', ''laura.garcia@sentirextranjero.com'', ''Laura Garcia'', ''staff'', ''+34910000001'', NOW()),
-(''staff-002'', ''diego.martinez@sentirextranjero.com'', ''Diego Martinez'', ''staff'', ''+34910000002'', NOW())
+(''staff-001'', ''laura@demo.com'', ''Laura Garcia'', ''staff'', ''+34910000001'', NOW()),
+(''staff-002'', ''diego@demo.com'', ''Diego Martinez'', ''staff'', ''+34910000002'', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert demo client users

@@ -25,6 +25,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json()
     const { name, description, documents, states, timeframe, base_case_type } = body
 
+    const allowedTemplates = await sql`
+      SELECT id FROM case_type_templates
+      WHERE id = ${id} AND organization_id = ${user.organization_id}
+    `
+    if (allowedTemplates.length === 0) {
+      return NextResponse.json({ error: "Case type not found" }, { status: 404 })
+    }
+
     const existing = await sql`
       UPDATE case_type_templates
       SET
@@ -43,7 +51,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         timeframe = COALESCE(${timeframe}, timeframe),
         base_case_type = COALESCE(${base_case_type}, base_case_type),
         updated_at = NOW()
-      WHERE id = ${id}
+      WHERE id = ${id} AND organization_id = ${user.organization_id}
       RETURNING *
     `
 
@@ -74,7 +82,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const { id } = await params
 
-    await sql`DELETE FROM case_type_templates WHERE id = ${id}`
+    const owned = await sql`
+      SELECT id FROM case_type_templates WHERE id = ${id} AND organization_id = ${user.organization_id}
+    `
+    if (owned.length === 0) {
+      return NextResponse.json({ error: "Case type not found" }, { status: 404 })
+    }
+
+    await sql`DELETE FROM case_type_templates WHERE id = ${id} AND organization_id = ${user.organization_id}`
 
     return NextResponse.json({ success: true })
   } catch (error) {

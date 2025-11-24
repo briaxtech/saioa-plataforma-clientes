@@ -426,3 +426,29 @@ model CaseKeyDateReminder {
   @@index([organizationId])
   @@map("case_key_date_reminders")
 }
+
+model SuperAdmin {
+  id           String   @id @default(cuid()) @db.Text
+  email        String   @unique @db.Text
+  passwordHash String   @map("password_hash") @db.Text
+  status       String   @default("active")
+  metadata     Json?
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  @@map("super_admins")
+}
+
+model TenantSignupCode {
+  id         Int      @id @default(autoincrement())
+  email      String   @db.Text
+  code       String   @db.Text
+  expiresAt  DateTime @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("tenant_signup_codes")
+}
+

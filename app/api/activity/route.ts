@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     if (user.role === "client") {
       // Client can only see their own case activities
       query += ` AND a.case_id IN (
-        SELECT id FROM cases WHERE client_id = $${params.length + 1} AND organization_id = ${user.organization_id}
+        SELECT id FROM cases WHERE client_id = $${params.length + 1} AND organization_id = $1
       )`
       params.push(user.id)
     }

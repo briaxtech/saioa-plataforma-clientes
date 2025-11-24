@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["admin", "staff"])
+    const user = await requireRole(["admin", "staff"])
 
     const { searchParams } = new URL(request.url)
     const reportType = searchParams.get("type")
@@ -19,54 +19,82 @@ export async function GET(request: NextRequest) {
 
     switch (reportType) {
       case "case_summary":
-        data = await sql`
-          SELECT 
-            c.*,
-            client.name as client_name,
-            client.email as client_email,
-            staff.name as staff_name
-          FROM cases c
-          LEFT JOIN users client ON c.client_id = client.id
-          LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-          WHERE (${!startDate} OR c.created_at >= ${startDate}::date)
-            AND (${!endDate} OR c.created_at <= ${endDate}::date)
-          ORDER BY c.created_at DESC
-        `
+        {
+          const conditions = ["c.organization_id = $1"]
+          const params: any[] = [user.organization_id]
+          if (startDate) {
+            conditions.push(`c.created_at >= $${params.length + 1}::date`)
+            params.push(startDate)
+          }
+          if (endDate) {
+            conditions.push(`c.created_at <= $${params.length + 1}::date`)
+            params.push(endDate)
+          }
+          const query = `
+            SELECT 
+              c.*,
+              client.name as client_name,
+              client.email as client_email,
+              staff.name as staff_name
+            FROM cases c
+            LEFT JOIN users client ON c.client_id = client.id AND client.organization_id = $1
+            LEFT JOIN users staff ON c.assigned_staff_id = staff.id AND staff.organization_id = $1
+            WHERE ${conditions.join(" AND ")}
+            ORDER BY c.created_at DESC
+          `
+          data = await sql.unsafe(query, params)
+        }
         break
 
       case "client_summary":
-        data = await sql`
-          SELECT 
-            c.*,
-            u.name,
-            u.email,
-            u.phone,
-            u.country_of_origin,
-            staff.name as staff_name,
-            (SELECT COUNT(*) FROM cases WHERE client_id = u.id) as total_cases,
-            (SELECT COUNT(*) FROM cases WHERE client_id = u.id AND status = 'completed') as completed_cases
-          FROM clients c
-          JOIN users u ON c.user_id = u.id
-          LEFT JOIN users staff ON c.assigned_staff_id = staff.id
-          ORDER BY c.created_at DESC
-        `
+        {
+          const query = `
+            SELECT 
+              cl.*,
+              u.name,
+              u.email,
+              u.phone,
+              u.country_of_origin,
+              staff.name as staff_name,
+              (SELECT COUNT(*) FROM cases WHERE client_id = u.id AND organization_id = $1) as total_cases,
+              (SELECT COUNT(*) FROM cases WHERE client_id = u.id AND organization_id = $1 AND status = 'completed') as completed_cases
+            FROM clients cl
+            JOIN users u ON cl.user_id = u.id AND cl.organization_id = $1
+            LEFT JOIN users staff ON cl.assigned_staff_id = staff.id AND staff.organization_id = $1
+            WHERE cl.organization_id = $1
+            ORDER BY cl.created_at DESC
+          `
+          data = await sql.unsafe(query, [user.organization_id])
+        }
         break
 
       case "document_summary":
-        data = await sql`
-          SELECT 
-            d.*,
-            c.case_number,
-            client.name as client_name,
-            uploader.name as uploader_name
-          FROM documents d
-          JOIN cases c ON d.case_id = c.id
-          LEFT JOIN users client ON c.client_id = client.id
-          LEFT JOIN users uploader ON d.uploaded_by = uploader.id
-          WHERE (${!startDate} OR d.created_at >= ${startDate}::date)
-            AND (${!endDate} OR d.created_at <= ${endDate}::date)
-          ORDER BY d.created_at DESC
-        `
+        {
+          const conditions = ["d.organization_id = $1"]
+          const params: any[] = [user.organization_id]
+          if (startDate) {
+            conditions.push(`d.created_at >= $${params.length + 1}::date`)
+            params.push(startDate)
+          }
+          if (endDate) {
+            conditions.push(`d.created_at <= $${params.length + 1}::date`)
+            params.push(endDate)
+          }
+          const query = `
+            SELECT 
+              d.*,
+              c.case_number,
+              client.name as client_name,
+              uploader.name as uploader_name
+            FROM documents d
+            JOIN cases c ON d.case_id = c.id AND c.organization_id = $1
+            LEFT JOIN users client ON c.client_id = client.id AND client.organization_id = $1
+            LEFT JOIN users uploader ON d.uploaded_by = uploader.id AND uploader.organization_id = $1
+            WHERE ${conditions.join(" AND ")}
+            ORDER BY d.created_at DESC
+          `
+          data = await sql.unsafe(query, params)
+        }
         break
 
       case "performance":
@@ -82,8 +110,8 @@ export async function GET(request: NextRequest) {
             AVG(CASE WHEN c.completion_date IS NOT NULL AND c.filing_date IS NOT NULL 
               THEN EXTRACT(DAY FROM (c.completion_date - c.filing_date)) END) as avg_completion_days
           FROM users u
-          LEFT JOIN cases c ON c.assigned_staff_id = u.id
-          WHERE u.role IN ('admin', 'staff')
+          LEFT JOIN cases c ON c.assigned_staff_id = u.id AND c.organization_id = ${user.organization_id}
+          WHERE u.role IN ('admin', 'staff') AND u.organization_id = ${user.organization_id}
           GROUP BY u.id, u.name, u.email
           ORDER BY total_cases DESC
         `

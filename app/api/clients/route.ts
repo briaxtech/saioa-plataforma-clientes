@@ -276,11 +276,11 @@ export async function POST(request: NextRequest) {
 
       const newCaseResult = await sql`
         INSERT INTO cases (
-          case_number, client_id, assigned_staff_id, case_type,
+          organization_id, case_number, client_id, assigned_staff_id, case_type,
           title, description, priority, case_type_template_id
         )
         VALUES (
-          ${caseNumber}, ${newUserId}, ${user.id}, ${baseCaseType},
+          ${tenantId}, ${caseNumber}, ${newUserId}, ${user.id}, ${baseCaseType},
           ${template.name}, ${template.description || null}, ${priority}, ${caseTypeId}
         )
         RETURNING *

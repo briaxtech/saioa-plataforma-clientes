@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth"
 
 export async function GET() {
   try {
-    await requireRole(["admin", "staff"])
+    const user = await requireRole(["admin", "staff"])
 
     // Get case statistics by status
     const casesByStatus = await sql`
@@ -12,6 +12,7 @@ export async function GET() {
         status,
         COUNT(*) as count
       FROM cases
+      WHERE organization_id = ${user.organization_id}
       GROUP BY status
     `
 
@@ -21,6 +22,7 @@ export async function GET() {
         case_type,
         COUNT(*) as count
       FROM cases
+      WHERE organization_id = ${user.organization_id}
       GROUP BY case_type
       ORDER BY count DESC
     `
@@ -31,7 +33,8 @@ export async function GET() {
         DATE_TRUNC('month', created_at) as month,
         COUNT(*) as count
       FROM cases
-      WHERE created_at >= NOW() - INTERVAL '6 months'
+      WHERE organization_id = ${user.organization_id}
+        AND created_at >= NOW() - INTERVAL '6 months'
       GROUP BY month
       ORDER BY month
     `
@@ -41,7 +44,8 @@ export async function GET() {
       SELECT 
         AVG(EXTRACT(DAY FROM (completion_date - filing_date))) as avg_days
       FROM cases
-      WHERE completion_date IS NOT NULL AND filing_date IS NOT NULL
+      WHERE organization_id = ${user.organization_id}
+        AND completion_date IS NOT NULL AND filing_date IS NOT NULL
     `
 
     // Get top performing staff
@@ -53,8 +57,8 @@ export async function GET() {
         COUNT(CASE WHEN c.status = 'completed' THEN 1 END) as completed_cases,
         COUNT(CASE WHEN c.status = 'approved' THEN 1 END) as approved_cases
       FROM users u
-      LEFT JOIN cases c ON c.assigned_staff_id = u.id
-      WHERE u.role IN ('admin', 'staff')
+      LEFT JOIN cases c ON c.assigned_staff_id = u.id AND c.organization_id = ${user.organization_id}
+      WHERE u.role IN ('admin', 'staff') AND u.organization_id = ${user.organization_id}
       GROUP BY u.id, u.name
       ORDER BY total_cases DESC
       LIMIT 10
@@ -63,9 +67,9 @@ export async function GET() {
     // Get pending items summary
     const pendingSummary = await sql`
       SELECT 
-        (SELECT COUNT(*) FROM documents WHERE status = 'pending') as pending_documents,
-        (SELECT COUNT(*) FROM cases WHERE status = 'pending') as pending_cases,
-        (SELECT COUNT(*) FROM cases WHERE deadline_date < NOW() AND status NOT IN ('completed', 'approved')) as overdue_cases
+        (SELECT COUNT(*) FROM documents WHERE status = 'pending' AND organization_id = ${user.organization_id}) as pending_documents,
+        (SELECT COUNT(*) FROM cases WHERE status = 'pending' AND organization_id = ${user.organization_id}) as pending_cases,
+        (SELECT COUNT(*) FROM cases WHERE deadline_date < NOW() AND status NOT IN ('completed', 'approved') AND organization_id = ${user.organization_id}) as overdue_cases
     `
 
     // Recent activity
@@ -75,8 +79,9 @@ export async function GET() {
         u.name as user_name,
         c.case_number
       FROM activity_logs a
-      LEFT JOIN users u ON a.user_id = u.id
-      LEFT JOIN cases c ON a.case_id = c.id
+      LEFT JOIN users u ON a.user_id = u.id AND u.organization_id = ${user.organization_id}
+      LEFT JOIN cases c ON a.case_id = c.id AND c.organization_id = ${user.organization_id}
+      WHERE a.organization_id = ${user.organization_id}
       ORDER BY a.created_at DESC
       LIMIT 10
     `

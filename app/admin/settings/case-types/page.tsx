@@ -44,17 +44,14 @@ const baseCaseOptions = [
 export default function CaseTypesSettingsPage() {
   const { toast } = useToast()
   const { data, mutate } = useSWR("/api/case-types", () => api.getCaseTypes())
-  const caseTypes = data?.caseTypes ?? []
+  const caseTypes = useMemo(() => data?.caseTypes ?? [], [data?.caseTypes])
 
   const [form, setForm] = useState<CaseTypeForm>(emptyForm)
   const [documentInput, setDocumentInput] = useState("")
   const [stateInput, setStateInput] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const isEditing = useMemo(
-    () => Boolean(form.id && caseTypes.some((type: any) => type.id === form.id)),
-    [caseTypes, form.id],
-  )
+  const isEditing = useMemo(() => Boolean(form.id && caseTypes.some((type: any) => type.id === form.id)), [caseTypes, form.id])
 
   const resetForm = () => {
     setForm(emptyForm)

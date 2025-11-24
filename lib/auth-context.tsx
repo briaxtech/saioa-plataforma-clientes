@@ -2,21 +2,13 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react"
 import { SessionProvider, useSession, signIn, signOut } from "next-auth/react"
-
-interface Organization {
-  id: string
-  name: string
-  slug: string
-  domain?: string | null
-  logo_url?: string | null
-  support_email?: string | null
-}
+import type { Organization } from "@/lib/types"
 
 interface AuthContextType {
   user: any | null
   organization: Organization | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string, slug?: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -26,10 +18,10 @@ function AuthStateProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
   const [isTransitioning, setIsTransitioning] = useState(false)
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, slug?: string) => {
     setIsTransitioning(true)
     try {
-      const result = await signIn("credentials", { redirect: false, email, password })
+      const result = await signIn("credentials", { redirect: false, email, password, slug })
       if (result?.error) {
         throw new Error(result.error === "CredentialsSignin" ? "Credenciales inválidas" : result.error)
       }

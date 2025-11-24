@@ -112,7 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const body = await request.json()
     const occursAt = parseDate(body.occurs_at)
     if (!occursAt) {
-      return NextResponse.json({ error: "Fecha inválida" }, { status: 400 })
+      return NextResponse.json({ error: "Fecha invalida" }, { status: 400 })
     }
     const title = normalizeString(body.title)
     if (!title) {

@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
 import { canOpenDocumentFile, documentHasFile, getDocumentFileUrl } from "@/lib/document-helpers"
-import { Upload, FileText } from "lucide-react"
+import { Upload, FileText, AlertTriangle } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/lib/auth-context"
 
 const DOCUMENT_STATUS_STYLES: Record<string, { label: string; className: string }> = {
   pending: {
@@ -17,7 +18,7 @@ const DOCUMENT_STATUS_STYLES: Record<string, { label: string; className: string 
     className: "bg-amber-500/10 text-amber-700",
   },
   submitted: {
-    label: "En revisión",
+    label: "En revision",
     className: "bg-blue-500/10 text-blue-700",
   },
   approved: {
@@ -38,7 +39,7 @@ const DOCUMENT_STATUS_STYLES: Record<string, { label: string; className: string 
   },
 }
 
-const formatDate = (value?: string) => {
+const formatDate = (value?: string | null) => {
   if (!value) return ""
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
@@ -50,11 +51,25 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [selectedCaseId, setSelectedCaseId] = useState<string>("")
   const { toast } = useToast()
+  const { organization } = useAuth()
 
-  const { data: documents, mutate } = useSWR("/api/documents", apiClient.get)
-  const { data: cases } = useSWR("/api/cases", apiClient.get)
+  const demoConfig = useMemo(() => {
+    const meta = (organization?.metadata || {}) as any
+    return {
+      isDemo: Boolean(meta?.is_demo || meta?.isDemo),
+      limits: meta?.demo_limits || meta?.demoLimits || {
+        uploadsPerDay: 3,
+        messagesPerDay: 10,
+        maxSizeMb: 1,
+        ttlMinutes: 30,
+      },
+    }
+  }, [organization?.metadata])
 
-  const caseOptions = cases?.cases ?? []
+  const { data: documentsData, mutate } = useSWR("/api/documents", apiClient.get)
+  const { data: casesData } = useSWR("/api/cases", apiClient.get)
+
+  const caseOptions = useMemo(() => casesData?.cases ?? [], [casesData?.cases])
 
   useEffect(() => {
     if (!selectedCaseId && caseOptions.length > 0) {
@@ -66,6 +81,24 @@ export default function DocumentsPage() {
     return caseOptions.find((item: any) => item.id.toString() === selectedCaseId) || caseOptions[0]
   }, [caseOptions, selectedCaseId])
 
+  const isToday = (value?: string | null) => {
+    if (!value) return false
+    const date = new Date(value)
+    const now = new Date()
+    return (
+      !Number.isNaN(date.getTime()) &&
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate()
+    )
+  }
+
+  const uploadedDocuments = documentsData?.documents ?? []
+  const todayUploads = useMemo(() => {
+    if (!demoConfig.isDemo) return 0
+    return uploadedDocuments.filter((doc: any) => isToday((doc as any).created_at || (doc as any).createdAt)).length
+  }, [demoConfig.isDemo, uploadedDocuments])
+
   const handleFileUpload = async (files: FileList, options?: { documentId?: string; overrideName?: string }) => {
     if (!currentCase) {
       toast({
@@ -74,6 +107,28 @@ export default function DocumentsPage() {
         variant: "destructive",
       })
       return
+    }
+
+    if (demoConfig.isDemo) {
+      const limit = demoConfig.limits.uploadsPerDay ?? 3
+      if (todayUploads >= limit || todayUploads + files.length > limit) {
+        toast({
+          title: "Limite de archivos en modo demo",
+          description: `Puedes subir hasta ${limit} archivos por dia. Intenta nuevamente manana.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      const overSized = Array.from(files).find((file) => file.size > (demoConfig.limits.maxSizeMb ?? 1) * 1024 * 1024)
+      if (overSized) {
+        toast({
+          title: "Archivo demasiado grande",
+          description: `El maximo en demo es ${demoConfig.limits.maxSizeMb ?? 1}MB por archivo.`,
+          variant: "destructive",
+        })
+        return
+      }
     }
 
     setUploading(true)
@@ -93,7 +148,7 @@ export default function DocumentsPage() {
         await apiClient.upload("/api/documents", formData)
         toast({
           title: "Documento enviado",
-          description: `${options?.overrideName || file.name} se cargó correctamente`,
+          description: `${options?.overrideName || file.name} se cargo correctamente`,
         })
       } catch (error) {
         toast({
@@ -124,7 +179,6 @@ export default function DocumentsPage() {
     }
   }
 
-  const uploadedDocuments = documents?.documents ?? []
   const documentsForCurrentCase = selectedCaseId
     ? uploadedDocuments.filter((doc: any) => doc.case_id?.toString() === selectedCaseId)
     : uploadedDocuments
@@ -137,17 +191,30 @@ export default function DocumentsPage() {
     if (event.target.files) {
       if (!canUploadRequirement(doc)) {
         toast({
-          title: "Documento en revisión",
-          description: "Esperá a que el equipo revise o pida una nueva versión antes de reemplazar el archivo.",
+          title: "Documento en revision",
+          description: "Espera a que el equipo revise o pida una nueva version antes de reemplazar el archivo.",
           variant: "default",
         })
         event.target.value = ""
         return
       }
 
+      if (demoConfig.isDemo) {
+        const limit = demoConfig.limits.uploadsPerDay ?? 3
+        if (todayUploads >= limit) {
+          toast({
+            title: "Limite de archivos en modo demo",
+            description: `Puedes subir hasta ${limit} archivos por dia. Intenta nuevamente manana.`,
+            variant: "destructive",
+          })
+          event.target.value = ""
+          return
+        }
+      }
+
       if (doc.status === "pending") {
         const confirmed = window.confirm(
-          "Una vez que envíes este archivo no podrás cambiarlo hasta que el equipo lo revise. ¿Deseas continuar?",
+          "Una vez que envies este archivo no podras cambiarlo hasta que el equipo lo revise. Deseas continuar?",
         )
         if (!confirmed) {
           event.target.value = ""
@@ -186,6 +253,20 @@ export default function DocumentsPage() {
         </Select>
       </Card>
 
+      {demoConfig.isDemo && (
+        <Card className="flex flex-col gap-2 border-amber-200 bg-amber-50/60 p-4 text-sm text-amber-900">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4" />
+            Modo demo
+          </div>
+          <p>
+            Limites: {demoConfig.limits.uploadsPerDay} archivos/dia, maximo {demoConfig.limits.maxSizeMb}MB cada uno. Los archivos
+            se eliminan automaticamente despues de {demoConfig.limits.ttlMinutes} minutos.
+          </p>
+          <p>Subiste hoy: {todayUploads}/{demoConfig.limits.uploadsPerDay}.</p>
+        </Card>
+      )}
+
       <Card
         className={`border-2 border-dashed p-12 text-center transition ${isDragging ? "border-primary bg-primary/5" : "border-border"}`}
         onDragOver={(e) => {
@@ -206,12 +287,10 @@ export default function DocumentsPage() {
         <input id="file-upload" type="file" multiple onChange={handleFileSelect} className="hidden" />
       </Card>
 
-  <Card className="p-6">
+      <Card className="p-6">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-foreground">Documentos requeridos</h3>
-          <p className="text-sm text-muted-foreground">
-            Te avisaremos cada vez que el equipo solicite un archivo nuevo.
-          </p>
+          <p className="text-sm text-muted-foreground">Te avisaremos cada vez que el equipo solicite un archivo nuevo.</p>
         </div>
         {requiredDocuments.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aun no tienes documentos pendientes.</p>
@@ -222,33 +301,26 @@ export default function DocumentsPage() {
               const hasFile = documentHasFile(doc)
               const fileUrl = getDocumentFileUrl(doc)
               const canUpload = canUploadRequirement(doc)
-              const uploadLabel = doc.status === "requires_action" ? "Subir nueva versión" : "Subir archivo"
+              const uploadLabel = doc.status === "requires_action" ? "Subir nueva version" : "Subir archivo"
               return (
-                <div
-                  key={doc.id}
-                  className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm"
-                >
+                <div key={doc.id} className="rounded-2xl border border-border/70 bg-card/50 p-4 shadow-sm">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-muted-foreground">{doc.category || "Requerido"}</p>
                       <p className="text-lg font-semibold text-foreground">{doc.name}</p>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        Última actualización: {formatDate(doc.updated_at || doc.created_at) || "Reciente"}
+                        Ultima actualizacion: {formatDate(doc.updated_at || doc.created_at) || "Reciente"}
                       </div>
                     </div>
                     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusConfig.className}`}>
                       {statusConfig.label}
                     </span>
                   </div>
-                  {doc.description && (
-                    <p className="mt-2 text-sm text-amber-800">Instrucciones: {doc.description}</p>
-                  )}
-                  {doc.review_notes && (
-                    <p className="mt-3 text-sm text-rose-600">Nota del equipo: {doc.review_notes}</p>
-                  )}
+                  {doc.description && <p className="mt-2 text-sm text-amber-800">Instrucciones: {doc.description}</p>}
+                  {doc.review_notes && <p className="mt-3 text-sm text-rose-600">Nota del equipo: {doc.review_notes}</p>}
                   {doc.status === "requires_action" && (
                     <p className="mt-2 text-xs text-rose-700">
-                      Necesitamos una nueva versión de este archivo. Subila con el botón de “{uploadLabel}”.
+                      Necesitamos una nueva version de este archivo. Subila con el boton de {uploadLabel}.
                     </p>
                   )}
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -268,21 +340,17 @@ export default function DocumentsPage() {
                       </label>
                     ) : (
                       <Button size="sm" variant="outline" disabled>
-                        {doc.status === "approved"
-                          ? "Validado"
-                          : doc.status === "submitted"
-                            ? "En revisión"
-                            : "No disponible"}
+                        {doc.status === "approved" ? "Validado" : doc.status === "submitted" ? "En revision" : "No disponible"}
                       </Button>
                     )}
                   </div>
                   {!canUpload && doc.status === "submitted" && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Estamos revisando tu archivo. Te avisaremos si necesitamos que subas una nueva versión.
+                      Estamos revisando tu archivo. Te avisaremos si necesitamos que subas una nueva version.
                     </p>
                   )}
                   {!canUpload && doc.status === "approved" && (
-                    <p className="mt-2 text-xs text-emerald-700">Archivo aprobado. No necesitás realizar acciones.</p>
+                    <p className="mt-2 text-xs text-emerald-700">Archivo aprobado. No necesitas realizar acciones.</p>
                   )}
                 </div>
               )
@@ -316,9 +384,7 @@ export default function DocumentsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`rounded px-2 py-1 text-xs font-medium ${statusConfig.className}`}>
-                      {statusConfig.label}
-                    </span>
+                    <span className={`rounded px-2 py-1 text-xs font-medium ${statusConfig.className}`}>{statusConfig.label}</span>
                     {fileUrl && canOpenDocumentFile(doc.status) && (
                       <Button size="sm" variant="ghost" onClick={() => window.open(fileUrl, "_blank")}>
                         Ver

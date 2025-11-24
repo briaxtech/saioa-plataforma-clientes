@@ -18,16 +18,37 @@ const DEFAULT_BRAND_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Tu agencia"
 
 interface AppSidebarProps {
   items: NavItem[]
-  userType: "admin" | "client"
+  userType: "admin" | "client" | "superadmin"
   organizationName?: string
+  logoUrl?: string | null
+  homeHref?: string
+  tagline?: string
+  isFixed?: boolean
   onLogout?: () => Promise<void> | void
   onNavigate?: () => void
   className?: string
 }
 
-export function AppSidebar({ items, userType, organizationName, onLogout, onNavigate, className }: AppSidebarProps) {
+export function AppSidebar({
+  items,
+  userType,
+  organizationName,
+  logoUrl,
+  homeHref,
+  tagline,
+  isFixed = false,
+  onLogout,
+  onNavigate,
+  className,
+}: AppSidebarProps) {
   const pathname = usePathname()
   const displayOrganization = organizationName || DEFAULT_BRAND_NAME
+  const resolvedHome =
+    homeHref ||
+    (userType === "admin" ? "/admin/dashboard" : userType === "client" ? "/client/dashboard" : "/superadmin")
+  const resolvedTagline =
+    tagline ||
+    (userType === "admin" ? "Portal equipo" : userType === "client" ? "Portal clientes" : "Panel propietario")
 
   const handleNavigate = () => {
     if (onNavigate) {
@@ -45,24 +66,24 @@ export function AppSidebar({ items, userType, organizationName, onLogout, onNavi
   return (
     <aside
       className={cn(
-        "flex w-64 flex-col border-r border-border bg-white text-[#031247] shadow-lg shadow-[#010b1c]/5",
+        "flex w-64 h-full flex-col border-r border-border bg-sidebar text-sidebar-foreground shadow-lg shadow-black/5 lg:overflow-y-auto",
+        isFixed ? "lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:h-screen" : "",
         className,
       )}
     >
       {/* Logo */}
-      <div className="bg-white p-6 text-center">
+      <div className="bg-sidebar p-6 text-center">
         <Link
-          href={userType === "admin" ? "/admin/dashboard" : "/client/dashboard"}
+          href={resolvedHome}
           className="flex flex-col items-center gap-2 text-center"
           onClick={handleNavigate}
         >
           <div className="shrink-0">
-            <Logo className="w-40" />
+            <Logo className="w-40" src={logoUrl || undefined} alt={displayOrganization} />
           </div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-[#031247]/70">
-            Portal {userType === "admin" ? "equipo" : "clientes"}
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-sidebar-foreground/80">
+            {resolvedTagline}
           </div>
-          <p className="text-[11px] font-medium text-[#031247]/50">{displayOrganization}</p>
         </Link>
       </div>
       <div className="mx-4 mb-4 h-1 rounded-full bg-gradient-to-r from-primary/60 via-primary to-primary/60" />
@@ -78,12 +99,14 @@ export function AppSidebar({ items, userType, organizationName, onLogout, onNavi
                   "flex items-center justify-between rounded-2xl border border-transparent px-4 py-2.5 text-sm font-medium transition",
                   pathname === item.href
                     ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-[#031247] hover:border-[#dbe4ff] hover:bg-[#f4f6ff]",
+                    : "text-sidebar-foreground/90 hover:border-muted hover:bg-muted/40",
                 )}
                 onClick={handleNavigate}
               >
                 <div className="flex items-center gap-3">
-                  <span className={cn("text-base", pathname === item.href ? "text-primary-foreground" : "text-[#031247]")}>
+                  <span
+                    className={cn("text-base", pathname === item.href ? "text-primary-foreground" : "text-sidebar-foreground")}
+                  >
                     {item.icon}
                   </span>
                   {item.label}
@@ -92,7 +115,7 @@ export function AppSidebar({ items, userType, organizationName, onLogout, onNavi
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-xs font-semibold",
-                      pathname === item.href ? "bg-white/30 text-white" : "bg-[#e8f5f6] text-[#02616d]",
+                      pathname === item.href ? "bg-white/30 text-white" : "bg-accent/15 text-accent-foreground",
                     )}
                   >
                     {item.badge}
@@ -105,11 +128,11 @@ export function AppSidebar({ items, userType, organizationName, onLogout, onNavi
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-[#e1e7f5] p-4">
+      <div className="border-t border-border/60 p-4">
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full rounded-2xl border border-transparent px-4 py-2.5 text-sm font-semibold text-[#031247] transition hover:border-[#dbe4ff] hover:bg-[#f4f6ff]"
+          className="w-full rounded-2xl border border-transparent px-4 py-2.5 text-sm font-semibold text-sidebar-foreground transition hover:border-muted hover:bg-muted/40"
         >
           Cerrar sesion
         </button>

@@ -29,7 +29,7 @@ function normalizeRecipients(value: any) {
 function ensureAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET_KEY
   if (!secret) {
-    return true
+    return false
   }
   const header = request.headers.get("x-cron-key")
   return header === secret
@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email provider not configured" }, { status: 500 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const organizationId = searchParams.get("organization_id")
+
     const reminders = await sql`
       SELECT 
         r.*, 
@@ -65,9 +68,9 @@ export async function POST(request: NextRequest) {
         cases.case_number,
         cases.assigned_staff_id
       FROM case_key_date_reminders r
-      JOIN case_key_dates c ON c.id = r.key_date_id
-      JOIN cases ON cases.id = r.case_id
-      WHERE r.status = 'scheduled' AND r.send_at <= NOW()
+      JOIN case_key_dates c ON c.id = r.key_date_id AND c.organization_id = r.organization_id
+      JOIN cases ON cases.id = r.case_id AND cases.organization_id = r.organization_id
+      WHERE r.status = 'scheduled' AND r.send_at <= NOW() ${organizationId ? sql`AND r.organization_id = ${organizationId}` : sql``}
       ORDER BY r.send_at ASC
       LIMIT 25
     `

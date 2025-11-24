@@ -64,7 +64,7 @@ Plataforma construida con Next.js 16 y Prisma para que agencias y estudios gesti
 - Todas las rutas del backend validan `organization_id` antes de leer/escribir (`lib/db` + helpers en `lib/auth`).
 - Los documentos se guardan en Supabase bajo la ruta `${organizationId}/cases/${caseId}/...` y se sirven con URLs firmadas temporales.
 - Notificaciones, actividad, contactos, fechas clave y plantillas consultan siempre la organizacion activa para garantizar aislamiento.
-- El branding por agencia se controla con `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_SUPPORT_EMAIL` y los assets/colores en `public/` y `app/globals.css`.
+- El branding por agencia se edita ahora en **Admin > Configuracion** (logo, colores, tipografias) y se guarda por tenant; `NEXT_PUBLIC_APP_NAME` y `NEXT_PUBLIC_SUPPORT_EMAIL` son valores por defecto.
 
 ## Scripts utiles
 

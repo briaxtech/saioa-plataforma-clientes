@@ -140,6 +140,10 @@ export const api = {
 
   markAllNotificationsRead: () => apiClient.post("/api/notifications/read-all", {}),
 
+  // Organization / branding
+  getOrganizationSettings: () => apiClient.get("/api/settings/organization"),
+  updateOrganizationSettings: (data: any) => apiClient.patch("/api/settings/organization", data),
+
   // Stats
   getStats: () => apiClient.get("/api/stats"),
 

@@ -11,15 +11,24 @@ export async function GET() {
 
     if (user.role === "admin" || user.role === "staff") {
       // Admin/Staff stats
-      const [totalCases] = await sql`SELECT COUNT(*) as count FROM cases`
+      const [totalCases] = await sql`
+        SELECT COUNT(*) as count
+        FROM cases
+        WHERE organization_id = ${user.organization_id}
+      `
       const [activeCases] = await sql`
         SELECT COUNT(*) as count FROM cases 
         WHERE status IN ('pending', 'in_progress', 'under_review')
+          AND organization_id = ${user.organization_id}
       `
-      const [totalClients] = await sql`SELECT COUNT(*) as count FROM clients`
+      const [totalClients] = await sql`
+        SELECT COUNT(*) as count
+        FROM clients
+        WHERE organization_id = ${user.organization_id}
+      `
       const [pendingDocs] = await sql`
         SELECT COUNT(*) as count FROM documents 
-        WHERE status = 'pending'
+        WHERE status = 'pending' AND organization_id = ${user.organization_id}
       `
 
       return NextResponse.json({
@@ -33,16 +42,16 @@ export async function GET() {
     } else {
       // Client stats
       const [cases] = await sql`
-        SELECT COUNT(*) as count FROM cases WHERE client_id = ${user.id}
+        SELECT COUNT(*) as count FROM cases WHERE client_id = ${user.id} AND organization_id = ${user.organization_id}
       `
       const [documents] = await sql`
         SELECT COUNT(*) as count FROM documents d
         JOIN cases c ON d.case_id = c.id
-        WHERE c.client_id = ${user.id}
+        WHERE c.client_id = ${user.id} AND c.organization_id = ${user.organization_id}
       `
       const [messages] = await sql`
         SELECT COUNT(*) as count FROM messages 
-        WHERE receiver_id = ${user.id} AND status != 'read'
+        WHERE receiver_id = ${user.id} AND organization_id = ${user.organization_id} AND status != 'read'
       `
 
       return NextResponse.json({

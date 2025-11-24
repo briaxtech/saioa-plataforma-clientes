@@ -13,6 +13,44 @@ export type DocumentStatus = "pending" | "submitted" | "approved" | "rejected" |
 
 export type MessageStatus = "sent" | "delivered" | "read"
 
+export interface BrandingPalette {
+  primary: string
+  primaryForeground: string
+  background: string
+  foreground: string
+  accent: string
+  accentForeground: string
+  muted: string
+  mutedForeground: string
+  border: string
+  card: string
+  cardForeground: string
+  sidebar: string
+  sidebarForeground: string
+}
+
+export interface BrandingTypography {
+  fontSans: string
+  fontHeading: string
+}
+
+export interface BrandingSettings {
+  logo_url?: string | null
+  logo_path?: string | null
+  palette?: Partial<BrandingPalette>
+  typography?: Partial<BrandingTypography>
+}
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  domain?: string | null
+  logo_url?: string | null
+  support_email?: string | null
+  branding?: BrandingSettings
+}
+
 export interface User {
   id: string
   organization_id: string
@@ -26,6 +64,7 @@ export interface User {
   avatar_url?: string
   created_at: string
   updated_at: string
+  organization?: Organization | null
 }
 
 export interface Client {

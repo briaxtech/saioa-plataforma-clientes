@@ -31,7 +31,8 @@ export async function GET() {
 
     const caseTypes = await sql`
       SELECT * FROM case_type_templates
-      ORDER BY created_at DESC
+      WHERE organization_id = ${user.organization_id} OR organization_id IS NULL
+      ORDER BY (organization_id IS NULL) ASC, created_at DESC
     `
 
     return NextResponse.json({ caseTypes: caseTypes.map(normalizeTemplate) })
@@ -55,12 +56,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
-    const templateId = id || name.toLowerCase().replace(/\s+/g, "-")
+    const slug = name.toLowerCase().replace(/\s+/g, "-")
+    const templateId = id || `${user.organization_id}-${slug}`
 
     const result = await sql`
-      INSERT INTO case_type_templates (id, name, description, documents, states, timeframe, base_case_type)
+      INSERT INTO case_type_templates (id, organization_id, name, description, documents, states, timeframe, base_case_type)
       VALUES (
         ${templateId},
+        ${user.organization_id},
         ${name},
         ${description || null},
         ${JSON.stringify(documents)},
@@ -75,7 +78,9 @@ export async function POST(request: NextRequest) {
         states = EXCLUDED.states,
         timeframe = EXCLUDED.timeframe,
         base_case_type = EXCLUDED.base_case_type,
+        organization_id = EXCLUDED.organization_id,
         updated_at = NOW()
+      WHERE case_type_templates.organization_id = EXCLUDED.organization_id
       RETURNING *
     `
 

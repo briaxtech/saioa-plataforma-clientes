@@ -4,6 +4,23 @@ import { sql, logActivity, createNotification } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { uploadCaseDocument, deleteCaseDocument } from "@/lib/storage"
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10MB safety limit
+const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
+
+const DEMO_DEFAULTS = { uploadsPerDay: 3, messagesPerDay: 10, maxSizeMb: 1, ttlMinutes: 30 }
+
+async function getDemoConfig(organizationId: string) {
+  const orgRows = await sql`
+    SELECT metadata
+    FROM organizations
+    WHERE id = ${organizationId}
+  `
+  const meta = (orgRows[0]?.metadata || {}) as any
+  const isDemo = Boolean(meta?.is_demo || meta?.isDemo)
+  const limits = meta?.demo_limits || meta?.demoLimits || DEMO_DEFAULTS
+  return { isDemo, limits }
+}
+
 const parseTemplateList = (value: any): any[] => {
   if (!value) return []
   if (Array.isArray(value)) return value
@@ -93,10 +110,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const demoConfig = await getDemoConfig(user.organization_id)
+
     const { searchParams } = new URL(request.url)
     const caseIdParam = searchParams.get("case_id")
     const status = searchParams.get("status")
     const caseId = caseIdParam ? Number(caseIdParam) : null
+    const limitParam = Number.parseInt(searchParams.get("limit") || "50")
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 200) : 50
 
     if (caseId) {
       await ensureTemplateRequirements(caseId, user.organization_id)
@@ -118,7 +139,10 @@ export async function GET(request: NextRequest) {
 
     const params: any[] = [user.organization_id]
 
-    if (user.role === "client") {
+    if (demoConfig.isDemo) {
+      query += ` AND d.uploaded_by = $${params.length + 1}`
+      params.push(user.id)
+    } else if (user.role === "client") {
       query += ` AND c.client_id = $${params.length + 1}`
       params.push(user.id)
     }
@@ -134,6 +158,8 @@ export async function GET(request: NextRequest) {
     }
 
     query += " ORDER BY d.created_at DESC"
+    query += ` LIMIT $${params.length + 1}`
+    params.push(limit)
 
     const documents = await sql.unsafe(query, params)
 
@@ -151,6 +177,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const demoConfig = await getDemoConfig(user.organization_id)
+    const maxUploadBytes = demoConfig.isDemo ? (demoConfig.limits.maxSizeMb ?? 1) * 1024 * 1024 : MAX_UPLOAD_BYTES
+
     const formData = await request.formData()
     const caseIdValue = formData.get("case_id")
     const file = formData.get("file") as File | null
@@ -163,9 +192,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Datos incompletos para subir el documento." }, { status: 400 })
     }
 
+    if (file.size > maxUploadBytes) {
+      return NextResponse.json(
+        { error: `El archivo es demasiado grande (limite ${(maxUploadBytes / 1024 / 1024).toFixed(1)}MB).` },
+        { status: 413 },
+      )
+    }
+    if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) {
+      return NextResponse.json({ error: "Tipo de archivo no permitido (solo PDF o imagenes)." }, { status: 415 })
+    }
+
     const caseId = Number(caseIdValue)
     if (Number.isNaN(caseId)) {
-      return NextResponse.json({ error: "ID de caso inválido" }, { status: 400 })
+      return NextResponse.json({ error: "ID de caso invalido" }, { status: 400 })
     }
 
     const caseRows = await sql`
@@ -189,6 +228,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No puedes subir documentos a este caso." }, { status: 403 })
     }
 
+    if (demoConfig.isDemo) {
+      const dailyCountRows = await sql`
+        SELECT COUNT(*)::int as count
+        FROM documents
+        WHERE organization_id = ${user.organization_id}
+          AND uploaded_by = ${user.id}
+          AND created_at::date = CURRENT_DATE
+      `
+      const dailyCount = dailyCountRows[0]?.count || 0
+      const limit = demoConfig.limits.uploadsPerDay ?? DEMO_DEFAULTS.uploadsPerDay
+      if (dailyCount >= limit) {
+        return NextResponse.json(
+          { error: `Limite diario alcanzado en modo demo (${limit} archivos). Intenta manana.` },
+          { status: 429 },
+        )
+      }
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer())
 
     const uploadResult = await uploadCaseDocument({
@@ -197,6 +254,8 @@ export async function POST(request: NextRequest) {
       fileName: name,
       buffer,
       contentType: file.type || "application/octet-stream",
+      pathPrefix: demoConfig.isDemo ? "demo" : undefined,
+      uploaderId: demoConfig.isDemo ? user.id : undefined,
     })
 
     const fileUrl = uploadResult.publicUrl

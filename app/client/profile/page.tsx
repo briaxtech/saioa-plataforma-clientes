@@ -8,8 +8,10 @@ import { useAuth } from "@/lib/auth-context"
 import { api } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 
+const DEFAULT_SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "soporte@demo.com"
+
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, organization } = useAuth()
   const { toast } = useToast()
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -27,7 +29,7 @@ export default function ProfilePage() {
     }
 
     if (form.newPassword !== form.confirmPassword) {
-      toast({ title: "Las contraseñas no coinciden", variant: "destructive" })
+      toast({ title: "Las contrasenas no coinciden", variant: "destructive" })
       return
     }
 
@@ -37,11 +39,11 @@ export default function ProfilePage() {
         currentPassword: form.currentPassword,
         newPassword: form.newPassword,
       })
-      toast({ title: "Contraseña actualizada" })
+      toast({ title: "Contrasena actualizada" })
       setForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
     } catch (error: any) {
       toast({
-        title: "No pudimos actualizar la contraseña",
+        title: "No pudimos actualizar la contrasena",
         description: error?.message || "Intenta nuevamente.",
         variant: "destructive",
       })
@@ -54,7 +56,7 @@ export default function ProfilePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Perfil y seguridad</h1>
-        <p className="mt-2 text-muted-foreground">Actualiza tu contraseña y consulta los datos básicos de tu cuenta.</p>
+        <p className="mt-2 text-muted-foreground">Actualiza tu contrasena y consulta los datos basicos de tu cuenta.</p>
       </div>
 
       <Card className="p-6">
@@ -70,15 +72,16 @@ export default function ProfilePage() {
           </div>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Si necesitás actualizar tus datos personales, escribinos a soporte@sentirextranjero.com para que podamos ayudarte.
+          Si necesitas actualizar tus datos personales, escribinos a {organization?.support_email || DEFAULT_SUPPORT_EMAIL} para
+          que podamos ayudarte.
         </p>
       </Card>
 
       <Card className="p-6">
-        <h2 className="mb-6 text-lg font-semibold text-foreground">Cambiar contraseña</h2>
+        <h2 className="mb-6 text-lg font-semibold text-foreground">Cambiar contrasena</h2>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Contraseña actual</label>
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Contrasena actual</label>
             <Input
               type="password"
               autoComplete="current-password"
@@ -88,7 +91,7 @@ export default function ProfilePage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Nueva contraseña</label>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Nueva contrasena</label>
               <Input
                 type="password"
                 autoComplete="new-password"
@@ -97,7 +100,7 @@ export default function ProfilePage() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Confirmar contraseña</label>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Confirmar contrasena</label>
               <Input
                 type="password"
                 autoComplete="new-password"
@@ -107,11 +110,11 @@ export default function ProfilePage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            La contraseña debe tener al menos 8 caracteres, combinando letras y números. Puedes cambiarla cuando quieras
-            desde esta pantalla.
+            La contrasena debe tener al menos 8 caracteres, combinando letras y numeros. Puedes cambiarla cuando quieras desde
+            esta pantalla.
           </p>
           <Button type="submit" className="mt-2" disabled={isSubmitting}>
-            {isSubmitting ? "Guardando..." : "Actualizar contraseña"}
+            {isSubmitting ? "Guardando..." : "Actualizar contrasena"}
           </Button>
         </form>
       </Card>
