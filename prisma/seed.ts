@@ -13,6 +13,11 @@ import bcrypt from "bcryptjs"
 const prisma = new PrismaClient()
 
 async function main() {
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PROD_SEED !== "true") {
+    console.warn("Seed abortado: NODE_ENV=production y ALLOW_PROD_SEED != true")
+    return
+  }
+
   const defaultPasswordHash = await bcrypt.hash("demo123", 10)
   const superAdminPasswordHash = await bcrypt.hash("SuperAdmin!23", 10)
 

@@ -93,7 +93,7 @@ export default function DocumentsPage() {
     )
   }
 
-  const uploadedDocuments = documentsData?.documents ?? []
+  const uploadedDocuments = useMemo(() => documentsData?.documents ?? [], [documentsData?.documents])
   const todayUploads = useMemo(() => {
     if (!demoConfig.isDemo) return 0
     return uploadedDocuments.filter((doc: any) => isToday((doc as any).created_at || (doc as any).createdAt)).length

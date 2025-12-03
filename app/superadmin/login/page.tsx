@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { setSuperadminToken } from "@/lib/superadmin-client"
 
 export default function SuperAdminLoginPage() {
   const router = useRouter()
@@ -26,7 +25,6 @@ export default function SuperAdminLoginPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error((data as any)?.error || "No se pudo iniciar sesion")
-      setSuperadminToken((data as any).token)
       router.replace("/superadmin")
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesion")

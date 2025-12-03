@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Bell, Mail, Phone } from "lucide-react"
 import { api, apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
+import { ImportClientsCard } from "@/components/admin/import-clients-card"
 
 const priorityOptions = [
   { value: "low", label: "Baja" },
@@ -225,6 +226,8 @@ export default function ClientsPage() {
           {showForm ? "Cerrar formulario" : "+ Agregar cliente"}
         </Button>
       </div>
+
+      <ImportClientsCard caseTypes={caseTypes} onImported={mutateClients} />
 
       {showForm && (
         <Card className="p-6">

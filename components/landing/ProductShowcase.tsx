@@ -1,4 +1,5 @@
 
+/* eslint-disable @next/next/no-img-element */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useLanguage } from './context/LanguageContext';
@@ -225,7 +226,11 @@ export const ProductShowcase: React.FC = () => {
             >
                <div className="flex items-center gap-3 mb-3">
                   <div className="w-8 h-8 rounded-full bg-brand-purple flex items-center justify-center">
-                     <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100" className="w-full h-full object-cover rounded-full" />
+                     <img
+                       src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100"
+                       alt="Lexy AI avatar"
+                       className="w-full h-full object-cover rounded-full"
+                     />
                   </div>
                   <div>
                      <div className="text-xs font-bold text-white">Lexy AI Analysis</div>

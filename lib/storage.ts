@@ -4,6 +4,7 @@ const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const documentBucket = process.env.SUPABASE_STORAGE_BUCKET || "case-documents"
 const brandingBucket = process.env.SUPABASE_BRANDING_BUCKET || documentBucket
+const SIGNED_URL_TTL_SECONDS = Number(process.env.SUPABASE_SIGNED_URL_TTL || 60 * 60) // default 1h
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.warn(
@@ -11,7 +12,10 @@ if (!supabaseUrl || !supabaseServiceKey) {
   )
 }
 
-const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } }) : null
+const supabase =
+  supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } })
+    : null
 const ensuredBuckets = new Set<string>()
 
 const sanitizeFilename = (value: string) =>
@@ -30,7 +34,7 @@ async function ensureBucketExists(bucketName: string) {
   }
 
   if (error && typeof error.message === "string" && /not found/i.test(error.message)) {
-    const { error: createError } = await supabase.storage.createBucket(bucketName, { public: true })
+    const { error: createError } = await supabase.storage.createBucket(bucketName, { public: false })
     if (createError) {
       throw createError
     }
@@ -70,10 +74,11 @@ export async function uploadCaseDocument(options: {
     throw error
   }
 
-  const { data } = supabase.storage.from(documentBucket).getPublicUrl(path)
+  const { data: signed } = await supabase.storage.from(documentBucket).createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
   return {
     path,
-    publicUrl: data.publicUrl,
+    publicUrl: signed?.signedUrl || null,
+    signedUrl: signed?.signedUrl || null,
   }
 }
 

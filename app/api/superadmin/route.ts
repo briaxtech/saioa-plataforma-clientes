@@ -164,7 +164,8 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ token, superadmin: { id: admin.id, email: admin.email } })
     response.cookies.set("superadmin_token", token, {
-      httpOnly: false, // middleware necesita leerlo en Edge, y el cliente ya guarda en localStorage
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       maxAge: 60 * 60 * 8,

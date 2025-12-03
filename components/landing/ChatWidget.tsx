@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Minimize2, Loader2 } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
@@ -20,7 +21,7 @@ export const ChatWidget: React.FC = () => {
     if (isOpen && messages.length === 0) {
       setMessages([{ role: 'model', content: t.chat.welcome }]);
     }
-  }, [isOpen, t.chat.welcome]);
+  }, [isOpen, t.chat.welcome, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

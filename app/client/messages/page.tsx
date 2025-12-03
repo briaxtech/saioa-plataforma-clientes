@@ -31,7 +31,7 @@ export default function MessagesPage() {
   }, [organization?.metadata])
 
   const { data: messagesData, mutate } = useSWR("/api/messages", apiClient.get)
-  const messages = messagesData?.messages || []
+  const messages = useMemo(() => messagesData?.messages || [], [messagesData?.messages])
 
   const selectedMsg = messages.find((m: any) => m.id === selectedMessage)
 

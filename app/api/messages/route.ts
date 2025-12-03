@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql, logActivity, createNotification } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 const DEMO_DEFAULTS = { uploadsPerDay: 3, messagesPerDay: 10, maxSizeMb: 1, ttlMinutes: 30 }
 
@@ -21,6 +22,16 @@ export async function GET(request: NextRequest) {
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const ip = getClientIp(request)
+    const rate = checkRateLimit({
+      key: `messages:${user.organization_id}:${user.id}:${ip}`,
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    })
+    if (!rate.ok) {
+      return NextResponse.json({ error: "Demasiados mensajes en poco tiempo. Intenta mas tarde." }, { status: 429 })
     }
 
     const demoConfig = await getDemoConfig(user.organization_id)

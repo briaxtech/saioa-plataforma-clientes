@@ -23,8 +23,9 @@ export const canOpenDocumentFile = (status?: string | null) => {
   return status.toLowerCase() !== "pending"
 }
 
-export const getDocumentFileUrl = (doc?: { file_url?: string | null } | null) => {
+export const getDocumentFileUrl = (doc?: { file_url?: string | null; signed_url?: string | null } | null) => {
   if (!doc) return null
+  if (doc.signed_url) return doc.signed_url
   if (doc.file_url) return doc.file_url
   return null
 }

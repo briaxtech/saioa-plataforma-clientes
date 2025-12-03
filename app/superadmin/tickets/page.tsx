@@ -66,7 +66,7 @@ export default function SuperadminTicketsPage() {
   const { data, isLoading, error, mutate } = useSWR<Ticket[]>("/api/superadmin/tickets", fetchTickets, {
     refreshInterval: 30_000,
   })
-  const tickets = data || []
+  const tickets = useMemo(() => data || [], [data])
 
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "all">("open")
   const [search, setSearch] = useState("")

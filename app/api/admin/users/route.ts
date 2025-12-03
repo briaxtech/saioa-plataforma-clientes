@@ -1,6 +1,18 @@
+import { randomBytes } from "crypto"
 import { type NextRequest, NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
 import { sql, logActivity } from "@/lib/db"
 import { requireRole } from "@/lib/auth"
+
+const generateTemporaryPassword = (length = 12) => {
+  const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+  const bytes = randomBytes(length)
+  let password = ""
+  for (let i = 0; i < length; i++) {
+    password += charset[bytes[i] % charset.length]
+  }
+  return password
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,7 +45,7 @@ export async function POST(request: NextRequest) {
     const admin = await requireRole(["admin"])
 
     const body = await request.json()
-    const { email, name, role, phone, country_of_origin } = body
+    const { email, name, role, phone, country_of_origin, password } = body
 
     if (!email || !name || !role) {
       return NextResponse.json({ error: "Email, name, and role are required" }, { status: 400 })
@@ -48,10 +60,12 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = `${role}-${Date.now()}`
+    const temporaryPassword = password && typeof password === "string" ? password : generateTemporaryPassword()
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12)
 
     const result = await sql`
-      INSERT INTO users (id, organization_id, email, name, role, phone, country_of_origin)
-      VALUES (${userId}, ${admin.organization_id}, ${normalizedEmail}, ${name}, ${role}, ${phone || null}, ${country_of_origin || null})
+      INSERT INTO users (id, organization_id, email, name, role, phone, country_of_origin, password_hash)
+      VALUES (${userId}, ${admin.organization_id}, ${normalizedEmail}, ${name}, ${role}, ${phone || null}, ${country_of_origin || null}, ${passwordHash})
       RETURNING *
     `
 
@@ -66,7 +80,10 @@ export async function POST(request: NextRequest) {
 
     await logActivity(admin.organization_id, admin.id, "user_created", `Created new user: ${name}`)
 
-    return NextResponse.json({ user: newUser }, { status: 201 })
+    return NextResponse.json(
+      { user: newUser, temporary_password: password ? undefined : temporaryPassword },
+      { status: 201 },
+    )
   } catch (error) {
     console.error("[v0] Failed to create user:", error)
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 })

@@ -2,7 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { Buffer } from "node:buffer"
 import { sql, logActivity, createNotification } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
-import { uploadCaseDocument, deleteCaseDocument } from "@/lib/storage"
+import { uploadCaseDocument, deleteCaseDocument, getSignedDocumentUrl } from "@/lib/storage"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 // 10MB safety limit
 const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
@@ -110,6 +111,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const ip = getClientIp(request)
+    const rate = checkRateLimit({
+      key: `upload:${user.organization_id}:${ip}`,
+      limit: 10,
+      windowMs: 10 * 60 * 1000,
+    })
+    if (!rate.ok) {
+      return NextResponse.json({ error: "Demasiadas subidas. Intenta en unos minutos." }, { status: 429 })
+    }
+
     const demoConfig = await getDemoConfig(user.organization_id)
 
     const { searchParams } = new URL(request.url)
@@ -163,7 +174,18 @@ export async function GET(request: NextRequest) {
 
     const documents = await sql.unsafe(query, params)
 
-    return NextResponse.json({ documents })
+    const documentsWithSignedUrls = await Promise.all(
+      documents.map(async (doc: any) => {
+        const signedUrl = doc.storage_path ? await getSignedDocumentUrl(doc.storage_path) : null
+        return {
+          ...doc,
+          file_url: signedUrl || doc.file_url || null,
+          signed_url: signedUrl || null,
+        }
+      }),
+    )
+
+    return NextResponse.json({ documents: documentsWithSignedUrls })
   } catch (error) {
     console.error("Failed to fetch documents:", error)
     return NextResponse.json({ error: "Failed to fetch documents" }, { status: 500 })
@@ -258,7 +280,7 @@ export async function POST(request: NextRequest) {
       uploaderId: demoConfig.isDemo ? user.id : undefined,
     })
 
-    const fileUrl = uploadResult.publicUrl
+    const fileUrl = uploadResult.signedUrl || uploadResult.publicUrl || null
     const storagePath = uploadResult.path
     const statusValue = "submitted"
 

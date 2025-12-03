@@ -1,21 +1,19 @@
 import type { BrandingPalette, BrandingSettings, BrandingTypography } from "./types"
 
-const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
-
 const DEFAULT_PALETTE: BrandingPalette = {
-  primary: "#36ccca",
-  primaryForeground: "#031247",
-  background: "#f4fbfb",
-  foreground: "#04152d",
-  accent: "#19b4bb",
-  accentForeground: "#031247",
-  muted: "#d9ecec",
-  mutedForeground: "#4f6670",
-  border: "#c2d8da",
-  card: "#ffffff",
-  cardForeground: "#04152d",
-  sidebar: "#031247",
-  sidebarForeground: "#f4fbfb",
+  primary: "#7c3aed", // brand purple
+  primaryForeground: "#0b0b12",
+  background: "#020204",
+  foreground: "#f5f7fb",
+  accent: "#06b6d4", // brand cyan
+  accentForeground: "#020204",
+  muted: "#0f172a",
+  mutedForeground: "#cbd5e1",
+  border: "#111827",
+  card: "#0a0a0c",
+  cardForeground: "#f5f7fb",
+  sidebar: "#020204",
+  sidebarForeground: "#f5f7fb",
 }
 
 const DEFAULT_TYPOGRAPHY: BrandingTypography = {
@@ -32,13 +30,11 @@ export interface ResolvedBranding {
 }
 
 export function resolveBranding(branding?: BrandingSettings | null): ResolvedBranding {
-  const palette = { ...DEFAULT_PALETTE, ...(branding?.palette || {}) }
-  const typography = { ...DEFAULT_TYPOGRAPHY, ...(branding?.typography || {}) }
-
   return {
     logo_url: branding?.logo_url || DEFAULT_LOGO_URL,
-    palette,
-    typography,
+    // Mantener la UI unificada con la paleta/tipografia base de la home
+    palette: DEFAULT_PALETTE,
+    typography: DEFAULT_TYPOGRAPHY,
   }
 }
 
@@ -101,41 +97,10 @@ export function applyBrandingTheme(branding?: BrandingSettings | null): Resolved
 }
 
 export function sanitizeBrandingPayload(payload: any): BrandingSettings {
-  const safePalette: Partial<BrandingPalette> = {}
-  const safeTypography: Partial<BrandingTypography> = {}
-
-  if (payload && typeof payload === "object") {
-    if (payload.palette && typeof payload.palette === "object") {
-      for (const [key, value] of Object.entries(payload.palette)) {
-        if (value && typeof value === "string" && HEX_COLOR_REGEX.test(value.trim())) {
-          const normalizedKey = key as keyof BrandingPalette
-          safePalette[normalizedKey] = value.trim()
-        }
-      }
-    }
-
-    if (payload.typography && typeof payload.typography === "object") {
-      if (payload.typography.fontSans && typeof payload.typography.fontSans === "string") {
-        safeTypography.fontSans = payload.typography.fontSans.trim().slice(0, 120)
-      }
-      if (payload.typography.fontHeading && typeof payload.typography.fontHeading === "string") {
-        safeTypography.fontHeading = payload.typography.fontHeading.trim().slice(0, 120)
-      }
-    }
-  }
-
   const branding: BrandingSettings = {}
 
   if (payload?.logo_url && typeof payload.logo_url === "string") {
     branding.logo_url = payload.logo_url.trim()
-  }
-
-  if (Object.keys(safePalette).length > 0) {
-    branding.palette = safePalette
-  }
-
-  if (Object.keys(safeTypography).length > 0) {
-    branding.typography = safeTypography
   }
 
   return branding

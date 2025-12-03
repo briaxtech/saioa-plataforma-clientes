@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer"
 import { getCurrentUser } from "@/lib/auth"
 import { sql } from "@/lib/db"
 import { getSignedDocumentUrl } from "@/lib/storage"
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit"
 
 const MAX_AI_BYTES = 8 * 1024 * 1024 // 8MB safety limit
 const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"])
@@ -23,6 +24,16 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser()
     if (!user || (user.role !== "admin" && user.role !== "staff")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const ip = getClientIp(request)
+    const rate = checkRateLimit({
+      key: `ai-review:${user.organization_id}:${ip}`,
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+    })
+    if (!rate.ok) {
+      return NextResponse.json({ error: "Demasiadas solicitudes de analisis. Intenta mas tarde." }, { status: 429 })
     }
 
     const { prompt, file_name, file_type, file_base64, case_id, document_id } = await request.json()

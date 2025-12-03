@@ -1,4 +1,5 @@
 
+/* eslint-disable @next/next/no-img-element */
 import React from 'react';
 import { ArrowRight, Play, Terminal } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';

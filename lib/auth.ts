@@ -4,6 +4,9 @@ import type { JWT } from "next-auth/jwt"
 import bcrypt from "bcryptjs"
 import { sql } from "./db"
 import type { BrandingSettings, Organization, User } from "./types"
+import { checkRateLimit, getClientIp } from "./rate-limit"
+
+const AUTH_SECRET = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
 type SessionOrganization = Organization | null
 
@@ -45,21 +48,17 @@ const credentialsProvider = CredentialsProvider({
     const slugInput =
       typeof credentials.slug === "string" && credentials.slug.trim() ? credentials.slug.trim().toLowerCase() : null
 
-    const baseQuery = `
+    if (!slugInput) {
+      throw new Error("Debes indicar el espacio (slug) de tu organizacion.")
+    }
+
+    const filteredQuery = `
       SELECT u.*, o.slug
       FROM users u
       JOIN organizations o ON u.organization_id = o.id
-      WHERE u.email = $1
+      WHERE u.email = $1 AND o.slug = $2
     `
-    const params: any[] = [normalizedEmail]
-
-    const filteredQuery = slugInput ? `${baseQuery} AND o.slug = $2` : baseQuery
-    let users = await sql.unsafe(filteredQuery, slugInput ? [...params, slugInput] : params)
-
-    // Si no encontramos coincidencia con el slug (o no se envio), probamos solo por email.
-    if ((!users || users.length === 0) && slugInput) {
-      users = await sql.unsafe(baseQuery, params)
-    }
+    const users = await sql.unsafe(filteredQuery, [normalizedEmail, slugInput])
 
     const userRecord = users?.[0] as (User & { password_hash?: string }) | undefined
     if (!userRecord || !userRecord.password_hash) {
@@ -92,12 +91,20 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: AUTH_SECRET,
   pages: {
     signIn: "/login",
   },
   providers: [credentialsProvider],
   callbacks: {
+    async signIn({ req }) {
+      const ip = req ? getClientIp(req as any) : "unknown"
+      const rate = checkRateLimit({ key: `login:${ip}`, limit: 10, windowMs: 5 * 60 * 1000 })
+      if (!rate.ok) {
+        throw new Error("Demasiados intentos de acceso. Intenta nuevamente en unos minutos.")
+      }
+      return true
+    },
     async jwt({ token, user }) {
       if (user) {
         token.user = user as User & { organization?: SessionOrganization }

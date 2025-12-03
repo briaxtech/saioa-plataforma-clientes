@@ -5,7 +5,6 @@ import { mergeBrandingSettings, sanitizeBrandingPayload } from "@/lib/branding"
 import { deleteOrganizationAsset, uploadOrganizationLogo } from "@/lib/storage"
 import type { BrandingSettings } from "@/lib/types"
 
-const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 const RESERVED_SLUGS = new Set(["login", "admin", "client", "api", "superadmin", "auth"])
 
 function slugify(value: string) {
@@ -19,11 +18,12 @@ function slugify(value: string) {
 
 function mapOrganization(row: any) {
   const metadata = (row?.metadata as { branding?: BrandingSettings } | null) || {}
-  const branding = { ...(metadata.branding || {}) }
+  const brandingMeta = metadata.branding || {}
+  const branding: BrandingSettings = {}
 
-  if (!branding.logo_url && row?.logo_url) {
-    branding.logo_url = row.logo_url
-  }
+  if (brandingMeta.logo_url) branding.logo_url = brandingMeta.logo_url
+  if (brandingMeta.logo_path) branding.logo_path = brandingMeta.logo_path
+  if (!branding.logo_url && row?.logo_url) branding.logo_url = row.logo_url
 
   return {
     id: row.id,
@@ -34,25 +34,6 @@ function mapOrganization(row: any) {
     support_email: row.support_email || null,
     branding: Object.keys(branding).length ? branding : undefined,
   }
-}
-
-function validatePaletteInput(input: any) {
-  if (!input || typeof input !== "object") return { valid: true }
-
-  const invalidEntries = Object.entries(input).filter(
-    ([, value]) => typeof value === "string" && value.trim() !== "" && !HEX_COLOR_REGEX.test(value.trim()),
-  )
-
-  if (invalidEntries.length > 0) {
-    return {
-      valid: false,
-      message: `Los colores deben estar en formato hex (#RRGGBB). Campos invalidos: ${invalidEntries
-        .map(([key]) => key)
-        .join(", ")}`,
-    }
-  }
-
-  return { valid: true }
 }
 
 export async function GET() {
@@ -131,11 +112,6 @@ export async function PATCH(request: NextRequest) {
       brandingInput = body.branding
     }
 
-    const paletteValidation = validatePaletteInput(brandingInput?.palette)
-    if (!paletteValidation.valid) {
-      return NextResponse.json({ error: paletteValidation.message }, { status: 400 })
-    }
-
     const rows = await sql`
       SELECT id, name, slug, domain, logo_url, support_email, metadata
       FROM organizations
@@ -210,7 +186,9 @@ export async function PATCH(request: NextRequest) {
 
     if (brandingInput) {
       const sanitizedBranding = sanitizeBrandingPayload(brandingInput)
-      applyBrandingUpdate(sanitizedBranding)
+      if (sanitizedBranding.logo_url || sanitizedBranding.logo_path) {
+        applyBrandingUpdate(sanitizedBranding)
+      }
     }
 
     let mergedMetadata = metadata
