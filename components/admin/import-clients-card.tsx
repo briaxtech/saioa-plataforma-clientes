@@ -75,7 +75,7 @@ export function ImportClientsCard({ caseTypes, onImported }: ImportClientsCardPr
     const formData = new FormData()
     formData.append("file", file)
     formData.append("sendInvites", String(sendInvites))
-    if (defaultCaseTypeId) {
+    if (defaultCaseTypeId && defaultCaseTypeId !== "no_selection") {
       formData.append("caseTypeId", defaultCaseTypeId)
     }
     if (priority) {
@@ -167,7 +167,7 @@ export function ImportClientsCard({ caseTypes, onImported }: ImportClientsCardPr
               <SelectValue placeholder="Opcional" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Sin caso automatico</SelectItem>
+              <SelectItem value="no_selection">Sin caso automatico</SelectItem>
               {caseTypes.map((type) => (
                 <SelectItem key={type.id} value={type.id}>
                   {type.name}
